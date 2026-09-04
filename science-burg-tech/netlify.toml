@@ -1,0 +1,29 @@
+# Configuração do deploy no Netlify.
+#
+# O repositório é um monorepo: o site fica em apps/web, e não na raiz.
+# Sem este arquivo é preciso configurar tudo na interface do Netlify.
+
+[build]
+  base = "apps/web"
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# O site usa BrowserRouter (rotas do lado do cliente). Sem esta regra,
+# abrir ou atualizar direto em /cardapio, /login ou /m/{token} devolve
+# 404, porque não existe um arquivo com esse nome no servidor. A regra
+# manda tudo para o index.html e deixa o React resolver a rota.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Cabeçalhos básicos de segurança para o site publicado.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "SAMEORIGIN"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"

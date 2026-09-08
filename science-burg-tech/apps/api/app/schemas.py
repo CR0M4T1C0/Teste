@@ -1,6 +1,6 @@
 from typing import Literal, Optional
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 
 # ── Cardápio ────────────────────────────────────────────────────────────────
 
@@ -110,8 +110,17 @@ class AdminTokenOut(BaseModel):
 
 
 class ItemPedidoIn(BaseModel):
-    produto_id: int
+    # Uma linha do pedido é OU um produto avulso OU um combo — nunca os
+    # dois, nunca nenhum.
+    produto_id: Optional[int] = None
+    combo_id: Optional[int] = None
     quantidade: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def _exatamente_um_produto_ou_combo(self) -> "ItemPedidoIn":
+        if (self.produto_id is None) == (self.combo_id is None):
+            raise ValueError("Informe exatamente um entre produto_id e combo_id")
+        return self
 
 
 class EnderecoIn(BaseModel):
@@ -139,6 +148,7 @@ class EnderecoOut(BaseModel):
 class ItemPedidoOut(BaseModel):
     id: int
     produto_id: Optional[int]
+    combo_id: Optional[int] = None
     nome_produto: str
     preco_unitario: float
     quantidade: int
@@ -152,6 +162,7 @@ class PedidoCreateIn(BaseModel):
     endereco_id: Optional[int] = None
     metodo_pagamento: Optional[str] = None
     observacoes: Optional[str] = None
+    codigo_cupom: Optional[str] = None
 
 
 class PedidoOut(BaseModel):
@@ -161,10 +172,13 @@ class PedidoOut(BaseModel):
     metodo_pagamento: Optional[str]
     subtotal: float
     taxa_entrega: float
+    desconto: float = 0.0
+    cupom_codigo: Optional[str] = None
     total: float
     observacoes: Optional[str]
     criado_em: str
     itens: list[ItemPedidoOut]
+    avaliacao_id: Optional[int] = None
 
 
 class PedidoAdminOut(PedidoOut):
@@ -222,6 +236,117 @@ class FecharComandaIn(BaseModel):
     metodo: Literal["cartao_credito", "cartao_debito", "pix", "dinheiro"]
 
 
+# ── Mesas Virtuais ("Network da Fome") ────────────────────────────────────
+
+TemaMesaVirtual = Literal[
+    "games", "tecnologia", "programacao", "ciencia",
+    "filmes_series", "musica", "livros", "papo_livre",
+]
+
+
+class ParticipanteMesaVirtualOut(BaseModel):
+    usuario_id: int
+    nome: str
+    lugar_numero: int
+    comendo: Optional[str] = None
+    entrou_em: str
+
+
+class MesaVirtualOut(BaseModel):
+    id: int
+    nome: str
+    capacidade: int
+    tema: Optional[TemaMesaVirtual]
+    lugares_ocupados: int
+    lugares_disponiveis: int
+    cheia: bool
+    participantes: list[ParticipanteMesaVirtualOut]
+
+
+class LugarMesaVirtualOut(BaseModel):
+    numero: int
+    participante: Optional[ParticipanteMesaVirtualOut]
+
+
+class MesaVirtualDetalheOut(BaseModel):
+    id: int
+    nome: str
+    capacidade: int
+    tema: Optional[TemaMesaVirtual]
+    lugares: list[LugarMesaVirtualOut]
+    meu_lugar: Optional[int] = None
+
+
+class SentarMesaVirtualIn(BaseModel):
+    lugar_numero: Optional[int] = Field(default=None, gt=0)
+
+
+class MensagemMesaVirtualOut(BaseModel):
+    id: int
+    mesa_virtual_id: int
+    usuario_id: int
+    nome: str
+    texto: str
+    criado_em: str
+
+
+class EnviarMensagemMesaVirtualIn(BaseModel):
+    texto: str = Field(min_length=1, max_length=500)
+
+
+class DenunciaMesaVirtualIn(BaseModel):
+    denunciado_usuario_id: int
+    motivo: str = Field(min_length=1, max_length=500)
+    mensagem_id: Optional[int] = None
+
+
+class BloqueioIn(BaseModel):
+    bloqueado_usuario_id: int
+
+
+class UsuarioBloqueadoOut(BaseModel):
+    usuario_id: int
+    nome: str
+
+
+# ── Moderação (painel do dono) ───────────────────────────────────────────────
+
+
+class ParticipanteAdminOut(ParticipanteMesaVirtualOut):
+    email: str
+
+
+class MesaVirtualAdminOut(BaseModel):
+    id: int
+    nome: str
+    capacidade: int
+    tema: Optional[TemaMesaVirtual]
+    ativa: bool
+    participantes: list[ParticipanteAdminOut]
+
+
+class DenunciaAdminOut(BaseModel):
+    id: int
+    mesa_virtual_id: int
+    mesa_virtual_nome: str
+    denunciante_id: int
+    denunciante_nome: str
+    denunciado_id: int
+    denunciado_nome: str
+    motivo: str
+    mensagem_texto: Optional[str]
+    status: str
+    criado_em: str
+
+
+class DenunciaStatusIn(BaseModel):
+    status: Literal["pendente", "analisada"]
+
+
+class BanirUsuarioIn(BaseModel):
+    motivo: Optional[str] = None
+
+
 # ── Relatórios (painel do dono) ───────────────────────────────────────────────
 
 
@@ -261,3 +386,206 @@ class RelatorioOut(BaseModel):
     produtos_mais_vendidos: list[ProdutoMaisVendidoOut]
     pagamentos_por_metodo: list[PagamentoPorMetodoOut]
     pedidos_por_hora: list[PedidosPorHoraOut]
+
+
+# ── Cupons ────────────────────────────────────────────────────────────────────
+
+
+class CupomOut(BaseModel):
+    id: int
+    codigo: str
+    tipo_desconto: Literal["percentual", "fixo"]
+    valor: float
+    valor_minimo_pedido: float
+    limite_uso_total: Optional[int]
+    limite_uso_por_usuario: Optional[int]
+    valido_de: Optional[str]
+    valido_ate: Optional[str]
+    ativo: bool
+
+
+class CupomCreateIn(BaseModel):
+    codigo: str = Field(min_length=2)
+    tipo_desconto: Literal["percentual", "fixo"]
+    valor: float = Field(gt=0)
+    valor_minimo_pedido: float = Field(default=0, ge=0)
+    limite_uso_total: Optional[int] = Field(default=None, gt=0)
+    limite_uso_por_usuario: Optional[int] = Field(default=None, gt=0)
+    valido_de: Optional[str] = None
+    valido_ate: Optional[str] = None
+    ativo: bool = True
+
+    @model_validator(mode="after")
+    def _percentual_no_maximo_100(self) -> "CupomCreateIn":
+        if self.tipo_desconto == "percentual" and self.valor > 100:
+            raise ValueError("Um cupom percentual não pode passar de 100%")
+        return self
+
+
+class CupomUpdateIn(BaseModel):
+    tipo_desconto: Optional[Literal["percentual", "fixo"]] = None
+    valor: Optional[float] = Field(default=None, gt=0)
+    valor_minimo_pedido: Optional[float] = Field(default=None, ge=0)
+    limite_uso_total: Optional[int] = Field(default=None, gt=0)
+    limite_uso_por_usuario: Optional[int] = Field(default=None, gt=0)
+    valido_de: Optional[str] = None
+    valido_ate: Optional[str] = None
+    ativo: Optional[bool] = None
+
+
+class CupomValidarIn(BaseModel):
+    codigo: str
+    subtotal: float = Field(ge=0)
+
+
+class CupomValidarOut(BaseModel):
+    valido: bool
+    motivo: Optional[str] = None
+    codigo: Optional[str] = None
+    desconto: float = 0.0
+
+
+# ── Promoções ────────────────────────────────────────────────────────────────
+
+
+class PromocaoOut(BaseModel):
+    id: int
+    titulo: str
+    subtitulo: Optional[str]
+    imagem_url: str
+    cupom_codigo: Optional[str] = None
+    ordem: int
+    ativo: bool
+    valido_de: Optional[str]
+    valido_ate: Optional[str]
+
+
+class PromocaoAdminOut(BaseModel):
+    id: int
+    titulo: str
+    subtitulo: Optional[str]
+    imagem_url: str
+    cupom_id: Optional[int]
+    ordem: int
+    ativo: bool
+    valido_de: Optional[str]
+    valido_ate: Optional[str]
+
+
+class PromocaoCreateIn(BaseModel):
+    titulo: str = Field(min_length=1)
+    subtitulo: Optional[str] = None
+    imagem_url: str
+    cupom_id: Optional[int] = None
+    ordem: int = 0
+    ativo: bool = True
+    valido_de: Optional[str] = None
+    valido_ate: Optional[str] = None
+
+
+class PromocaoUpdateIn(BaseModel):
+    titulo: Optional[str] = None
+    subtitulo: Optional[str] = None
+    imagem_url: Optional[str] = None
+    cupom_id: Optional[int] = None
+    ordem: Optional[int] = None
+    ativo: Optional[bool] = None
+    valido_de: Optional[str] = None
+    valido_ate: Optional[str] = None
+
+
+# ── Combos ───────────────────────────────────────────────────────────────────
+
+
+class ComboItemOut(BaseModel):
+    produto_id: int
+    nome: str
+    quantidade: int
+
+
+class ComboOut(BaseModel):
+    id: int
+    nome: str
+    slug: str
+    descricao: Optional[str]
+    preco: float
+    imagem_url: Optional[str]
+    disponivel: bool
+    itens: list[ComboItemOut]
+
+
+class ComboItemIn(BaseModel):
+    produto_id: int
+    quantidade: int = Field(default=1, gt=0)
+
+
+class ComboCreateIn(BaseModel):
+    nome: str = Field(min_length=1)
+    slug: str = Field(min_length=1)
+    descricao: Optional[str] = None
+    preco: float = Field(ge=0)
+    imagem_url: Optional[str] = None
+    disponivel: bool = True
+    itens: list[ComboItemIn] = Field(min_length=1)
+
+
+class ComboUpdateIn(BaseModel):
+    nome: Optional[str] = None
+    descricao: Optional[str] = None
+    preco: Optional[float] = Field(default=None, ge=0)
+    imagem_url: Optional[str] = None
+    disponivel: Optional[bool] = None
+    itens: Optional[list[ComboItemIn]] = None
+
+
+# ── Avaliações ───────────────────────────────────────────────────────────────
+
+
+class AvaliacaoOut(BaseModel):
+    id: int
+    usuario_nome: str
+    nota: int
+    comentario: Optional[str]
+    criado_em: str
+
+
+class AvaliacaoCreateIn(BaseModel):
+    pedido_id: int
+    nota: int = Field(ge=1, le=5)
+    comentario: Optional[str] = None
+
+
+class AvaliacaoAdminOut(BaseModel):
+    id: int
+    usuario_nome: str
+    pedido_id: int
+    nota: int
+    comentario: Optional[str]
+    aprovado: bool
+    criado_em: str
+
+
+class AvaliacaoModeracaoIn(BaseModel):
+    aprovado: bool
+
+
+# ── G.P.T. (Grill Potato Toast) ─────────────────────────────────────────────
+
+
+class GptMensagemIn(BaseModel):
+    # "cliente" = quem digitou; "gpt" = resposta anterior do atendente.
+    autor: Literal["cliente", "gpt"]
+    # Teto de tamanho: uma pergunta de cardápio não precisa de mais que isso,
+    # e o limite evita que alguém use nosso endpoint para processar textões.
+    texto: str = Field(min_length=1, max_length=600)
+
+
+class GptConversaIn(BaseModel):
+    # Só as últimas trocas são enviadas: histórico longo encarece a chamada
+    # sem melhorar a resposta num atendimento curto como este.
+    mensagens: list[GptMensagemIn] = Field(min_length=1, max_length=12)
+
+
+class GptRespostaOut(BaseModel):
+    resposta: str
+    disponivel: bool

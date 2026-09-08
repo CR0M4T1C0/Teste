@@ -53,6 +53,7 @@ def _montar_comanda_out(db: psycopg.Connection, comanda: dict) -> ComandaOut:
         ItemPedidoOut(
             id=i["id"],
             produto_id=i["produto_id"],
+            combo_id=i["combo_id"],
             nome_produto=i["nome_produto"],
             preco_unitario=i["preco_unitario"],
             quantidade=i["quantidade"],

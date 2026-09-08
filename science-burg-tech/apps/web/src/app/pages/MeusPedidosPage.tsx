@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
-import { Check, LogIn, PackageSearch, RotateCcw } from "lucide-react";
+import { Check, LogIn, PackageSearch, RotateCcw, Star } from "lucide-react";
 import { FadeUp } from "@/app/components/common/FadeUp";
+import { AvaliarPedidoModal } from "@/app/pages/AvaliarPedidoModal";
 import { useCartContext } from "@/app/hooks/useCartContext";
 import { useClienteAuth } from "@/app/hooks/useClienteAuth";
 import { meusPedidos } from "@/app/lib/api";
@@ -58,6 +59,7 @@ export function MeusPedidosPage() {
   const [pedidos, setPedidos] = useState<PedidoApi[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [repetido, setRepetido] = useState<number | null>(null);
+  const [avaliandoPedidoId, setAvaliandoPedidoId] = useState<number | null>(null);
 
   useEffect(() => {
     if (!token) return;
@@ -67,12 +69,20 @@ export function MeusPedidosPage() {
   }, [token]);
 
   const pedirDeNovo = (pedido: PedidoApi) => {
-    const itensValidos = pedido.itens.filter((i) => i.produto_id != null);
+    const itensValidos = pedido.itens.filter((i) => i.produto_id != null || i.combo_id != null);
     adicionarVarios(
-      itensValidos.map((i) => ({ id: i.produto_id as number, nome: i.nome_produto, preco: i.preco_unitario, qty: i.quantidade })),
+      itensValidos.map((i) =>
+        i.combo_id != null
+          ? { id: i.combo_id, tipo: "combo" as const, nome: i.nome_produto, preco: i.preco_unitario, qty: i.quantidade }
+          : { id: i.produto_id as number, tipo: "produto" as const, nome: i.nome_produto, preco: i.preco_unitario, qty: i.quantidade },
+      ),
     );
     setRepetido(pedido.id);
     window.setTimeout(() => setRepetido((atual) => (atual === pedido.id ? null : atual)), 2500);
+  };
+
+  const marcarComoAvaliado = (pedidoId: number) => {
+    setPedidos((atual) => atual?.map((p) => (p.id === pedidoId ? { ...p, avaliacao_id: -1 } : p)) ?? atual);
   };
 
   if (carregandoAuth) return null;
@@ -136,22 +146,37 @@ export function MeusPedidosPage() {
                     </li>
                   ))}
                 </ul>
-                <div className="flex items-center justify-between pt-4 gap-4">
-                  <button
-                    onClick={() => pedirDeNovo(pedido)}
-                    disabled={repetido === pedido.id}
-                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border border-border text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors disabled:opacity-70"
-                  >
-                    {repetido === pedido.id ? (
-                      <>
-                        <Check size={13} className="text-accent" /> Adicionado ao carrinho
-                      </>
-                    ) : (
-                      <>
-                        <RotateCcw size={13} /> Pedir de novo
-                      </>
+                <div className="flex items-center justify-between pt-4 gap-4 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => pedirDeNovo(pedido)}
+                      disabled={repetido === pedido.id}
+                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border border-border text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors disabled:opacity-70"
+                    >
+                      {repetido === pedido.id ? (
+                        <>
+                          <Check size={13} className="text-accent" /> Adicionado ao carrinho
+                        </>
+                      ) : (
+                        <>
+                          <RotateCcw size={13} /> Pedir de novo
+                        </>
+                      )}
+                    </button>
+                    {pedido.status === "entregue" && pedido.avaliacao_id == null && (
+                      <button
+                        onClick={() => setAvaliandoPedidoId(pedido.id)}
+                        className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border border-border text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
+                      >
+                        <Star size={13} /> Avaliar
+                      </button>
                     )}
-                  </button>
+                    {pedido.status === "entregue" && pedido.avaliacao_id != null && (
+                      <span className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-accent">
+                        <Star size={13} className="fill-accent" /> Avaliado
+                      </span>
+                    )}
+                  </div>
                   <div className="flex items-baseline gap-2">
                     <span className="font-bold text-sm" style={{ fontFamily: "'Bricolage Grotesque',sans-serif" }}>
                       Total
@@ -166,6 +191,14 @@ export function MeusPedidosPage() {
           </div>
         )}
       </div>
+
+      {avaliandoPedidoId != null && (
+        <AvaliarPedidoModal
+          pedidoId={avaliandoPedidoId}
+          onClose={() => setAvaliandoPedidoId(null)}
+          onEnviada={() => marcarComoAvaliado(avaliandoPedidoId)}
+        />
+      )}
     </section>
   );
 }

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { LogIn } from "lucide-react";
-import { Link, useNavigate } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import { FadeUp } from "@/app/components/common/FadeUp";
 import { useClienteAuth } from "@/app/hooks/useClienteAuth";
 import { ApiError } from "@/app/lib/api";
@@ -8,6 +8,7 @@ import { ApiError } from "@/app/lib/api";
 export function LoginPage() {
   const { login } = useClienteAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [erro, setErro] = useState<string | null>(null);
@@ -19,7 +20,10 @@ export function LoginPage() {
     setEnviando(true);
     try {
       await login(email, senha);
-      navigate("/pedidos");
+      // Se veio de uma página que exigia login (ex.: Network da Fome),
+      // volta pra lá; senão vai para o padrão de sempre.
+      const depois = (location.state as { depois?: string } | null)?.depois;
+      navigate(depois ?? "/pedidos");
     } catch (err) {
       setErro(err instanceof ApiError ? err.message : "Não foi possível entrar. Tente novamente.");
     } finally {

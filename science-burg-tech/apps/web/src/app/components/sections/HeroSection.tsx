@@ -1,19 +1,27 @@
-import { motion } from "motion/react";
+import { useState } from "react";
+import { motion, useReducedMotion } from "motion/react";
 import { ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { Link } from "react-router";
 import { HERO_SLIDES } from "@/app/data/menu";
 import { useCardapio } from "@/app/hooks/useCardapio";
-import { useHeroCarousel } from "@/app/hooks/useHeroCarousel";
+import { useCarousel } from "@/app/hooks/useCarousel";
 import type { Item } from "@/app/types";
 
 export function HeroSection({ onAdd }: { onAdd: (i: Item) => void }) {
-  const { slide, goSlide } = useHeroCarousel(HERO_SLIDES.length);
+  const [emHover, setEmHover] = useState(false);
+  const reduzirMovimento = useReducedMotion();
+  const { slide, goSlide } = useCarousel(HERO_SLIDES.length, 5000, emHover || Boolean(reduzirMovimento));
   const currentSlide = HERO_SLIDES[slide];
-  const { todosItens } = useCardapio();
+  const { todosItens, carregando } = useCardapio();
   const itemDestaque = todosItens.find((i) => i.slug === currentSlide.produtoSlug);
+  const mostrarColunaDestaque = carregando || Boolean(itemDestaque);
 
   return (
-    <section className="relative h-[90vh] min-h-[560px] overflow-hidden bg-zinc-950">
+    <section
+      className="relative h-[90vh] min-h-[560px] overflow-hidden bg-zinc-950"
+      onMouseEnter={() => setEmHover(true)}
+      onMouseLeave={() => setEmHover(false)}
+    >
       {/* Slides */}
       {HERO_SLIDES.map((s, i) => (
         <motion.div key={s.id} animate={{ opacity: i === slide ? 1 : 0 }} transition={{ duration: 0.8, ease: "easeInOut" }} className="absolute inset-0">
@@ -25,7 +33,11 @@ export function HeroSection({ onAdd }: { onAdd: (i: Item) => void }) {
 
       {/* Conteúdo do slide ativo */}
       <div className="relative z-10 h-full flex items-center">
-        <div className="max-w-7xl mx-auto px-6 w-full grid grid-cols-1 lg:grid-cols-2 items-center gap-8">
+        <div
+          className={`max-w-7xl mx-auto px-6 w-full grid grid-cols-1 items-center gap-8 ${
+            mostrarColunaDestaque ? "lg:grid-cols-2" : "lg:max-w-3xl"
+          }`}
+        >
           <div>
             <motion.div
               key={`badge-${slide}`}
@@ -93,40 +105,54 @@ export function HeroSection({ onAdd }: { onAdd: (i: Item) => void }) {
           </div>
 
           {/* Card flutuante */}
-          {itemDestaque && (
+          {mostrarColunaDestaque && (
             <div className="hidden lg:flex justify-end">
-              <motion.div
-                key={`card-${slide}`}
-                initial={{ opacity: 0, x: 40, rotate: 2 }}
-                animate={{ opacity: 1, x: 0, rotate: 0 }}
-                transition={{ delay: 0.3, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-                className="bg-card/85 backdrop-blur-xl border border-border rounded-3xl p-6 w-72 shadow-2xl"
-              >
-                <div className="aspect-square rounded-2xl overflow-hidden mb-4 bg-secondary">
-                  <img src={itemDestaque.img} alt={itemDestaque.nome} className="w-full h-full object-cover" />
-                </div>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-0.5" style={{ fontFamily: "'JetBrains Mono',monospace" }}>
-                      ⭐ Destaque
-                    </p>
-                    <p className="font-bold text-foreground" style={{ fontFamily: "'Bricolage Grotesque',sans-serif" }}>
-                      {itemDestaque.nome}
-                    </p>
+              {!itemDestaque ? (
+                <div className="bg-card/85 backdrop-blur-xl border border-border rounded-3xl p-6 w-72 shadow-2xl animate-pulse">
+                  <div className="aspect-square rounded-2xl mb-4 bg-secondary" />
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1">
+                      <div className="h-3 w-16 rounded bg-secondary mb-2" />
+                      <div className="h-4 w-28 rounded bg-secondary" />
+                    </div>
+                    <div className="h-5 w-14 rounded bg-secondary" />
                   </div>
-                  <span className="text-lg font-bold text-primary" style={{ fontFamily: "'Bricolage Grotesque',sans-serif" }}>
-                    R$ {itemDestaque.preco.toFixed(2).replace(".", ",")}
-                  </span>
+                  <div className="w-full mt-4 h-10 rounded-xl bg-secondary" />
                 </div>
-                <motion.button
-                  whileTap={{ scale: 0.96 }}
-                  onClick={() => onAdd(itemDestaque)}
-                  className="w-full mt-4 py-2.5 bg-primary text-white text-sm font-bold rounded-xl hover:bg-primary/90 transition-colors"
-                  style={{ fontFamily: "'Bricolage Grotesque',sans-serif" }}
+              ) : (
+                <motion.div
+                  key={`card-${slide}`}
+                  initial={{ opacity: 0, x: 40, rotate: 2 }}
+                  animate={{ opacity: 1, x: 0, rotate: 0 }}
+                  transition={{ delay: 0.3, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+                  className="bg-card/85 backdrop-blur-xl border border-border rounded-3xl p-6 w-72 shadow-2xl"
                 >
-                  Adicionar ao Carrinho
-                </motion.button>
-              </motion.div>
+                  <div className="aspect-square rounded-2xl overflow-hidden mb-4 bg-secondary">
+                    <img src={itemDestaque.img} alt={itemDestaque.nome} className="w-full h-full object-cover" />
+                  </div>
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-0.5" style={{ fontFamily: "'JetBrains Mono',monospace" }}>
+                        ⭐ Destaque
+                      </p>
+                      <p className="font-bold text-foreground" style={{ fontFamily: "'Bricolage Grotesque',sans-serif" }}>
+                        {itemDestaque.nome}
+                      </p>
+                    </div>
+                    <span className="text-lg font-bold text-primary" style={{ fontFamily: "'Bricolage Grotesque',sans-serif" }}>
+                      R$ {itemDestaque.preco.toFixed(2).replace(".", ",")}
+                    </span>
+                  </div>
+                  <motion.button
+                    whileTap={{ scale: 0.96 }}
+                    onClick={() => onAdd(itemDestaque)}
+                    className="w-full mt-4 py-2.5 bg-primary text-white text-sm font-bold rounded-xl hover:bg-primary/90 transition-colors"
+                    style={{ fontFamily: "'Bricolage Grotesque',sans-serif" }}
+                  >
+                    Adicionar ao Carrinho
+                  </motion.button>
+                </motion.div>
+              )}
             </div>
           )}
         </div>

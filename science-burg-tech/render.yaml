@@ -70,10 +70,26 @@ services:
       - key: VITE_API_URL
         sync: false
 
-    # O site usa BrowserRouter (rotas do lado do cliente). Sem esta
-    # regra, abrir ou atualizar direto em /cardapio ou /m/{token}
-    # devolveria 404, porque não existe arquivo com esse nome.
+    # O front chama a API com caminhos relativos (ex.: fetch("/api/..."),
+    # veja apps/web/src/app/lib/api.ts). Isso só funciona sozinho no "vite
+    # dev" por causa do proxy em vite.config.ts — em produção, sem estas
+    # duas regras, "/api/*" e "/uploads/*" cairiam na regra catch-all lá
+    # embaixo e o front receberia o index.html (HTML) em vez de JSON.
+    #
+    # IMPORTANTE: troque a URL abaixo pelo domínio real do serviço
+    # science-burg-api depois do primeiro deploy (Render só sorteia a URL
+    # final quando cria o serviço).
     routes:
+      - type: rewrite
+        source: /api/*
+        destination: https://science-burg-api.onrender.com/api/*
+      - type: rewrite
+        source: /uploads/*
+        destination: https://science-burg-api.onrender.com/uploads/*
+
+      # O site usa BrowserRouter (rotas do lado do cliente). Sem esta
+      # regra, abrir ou atualizar direto em /cardapio ou /m/{token}
+      # devolveria 404, porque não existe arquivo com esse nome.
       - type: rewrite
         source: /*
         destination: /index.html

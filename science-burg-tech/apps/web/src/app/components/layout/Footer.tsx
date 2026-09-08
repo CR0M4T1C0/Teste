@@ -1,4 +1,4 @@
-import { Banknote, Cpu, CreditCard, Facebook, Instagram, Smartphone, Twitter } from "lucide-react";
+import { Banknote, Cpu, CreditCard, Smartphone } from "lucide-react";
 import { Link } from "react-router";
 
 const PAYMENT_METHODS: [React.ReactNode, string][] = [
@@ -6,8 +6,6 @@ const PAYMENT_METHODS: [React.ReactNode, string][] = [
   [<Smartphone size={14} />, "PIX — Instantâneo"],
   [<Banknote size={14} />, "Dinheiro em espécie"],
 ];
-
-const SOCIALS = [<Instagram size={15} />, <Facebook size={15} />, <Twitter size={15} />];
 
 export function Footer() {
   return (
@@ -29,17 +27,6 @@ export function Footer() {
             <p className="text-xs text-muted-foreground leading-relaxed mb-5">
               A hamburgueria onde cada pedido é um deploy de sabor. Open-source para o seu apetite desde 2020.
             </p>
-            <div className="flex gap-2">
-              {SOCIALS.map((ic, i) => (
-                <a
-                  key={i}
-                  href="#"
-                  className="w-8 h-8 rounded-xl bg-secondary border border-border flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary/40 transition-all"
-                >
-                  {ic}
-                </a>
-              ))}
-            </div>
           </div>
 
           {/* Links */}
@@ -67,8 +54,6 @@ export function Footer() {
               {[
                 ["Sobre Nós", "/sobre"],
                 ["Localização", "/localizacao"],
-                ["Carreiras", "#"],
-                ["Imprensa", "#"],
               ].map(([l, href]) => (
                 <li key={l}>
                   <Link to={href} className="text-xs text-muted-foreground hover:text-primary transition-colors">
@@ -105,7 +90,7 @@ export function Footer() {
 
         <div className="border-t border-border pt-5 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="text-[11px] text-muted-foreground" style={{ fontFamily: "'JetBrains Mono',monospace" }}>
-            © 2025 Science Burg Tech. Todos os direitos reservados.
+            © {new Date().getFullYear()} Science Burg Tech. Todos os direitos reservados.
           </p>
           <p className="text-[11px] text-muted-foreground" style={{ fontFamily: "'JetBrains Mono',monospace" }}>
             <span className="text-accent">exit</span>(0); // obrigado pela visita

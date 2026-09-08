@@ -16,6 +16,14 @@ from app.schemas import (
     AdminLoginIn,
     AdministradorOut,
     AdminTokenOut,
+    AvaliacaoAdminOut,
+    AvaliacaoModeracaoIn,
+    ComboCreateIn,
+    ComboOut,
+    ComboUpdateIn,
+    CupomCreateIn,
+    CupomOut,
+    CupomUpdateIn,
     FecharComandaIn,
     ImagemUploadOut,
     MesaAdminOut,
@@ -25,8 +33,15 @@ from app.schemas import (
     ProdutoCreateIn,
     ProdutoOut,
     ProdutoUpdateIn,
+    PromocaoAdminOut,
+    PromocaoCreateIn,
+    PromocaoUpdateIn,
 )
+from app.routers.avaliacoes import _linha_para_avaliacao_admin
 from app.routers.cardapio import _linha_para_produto
+from app.routers.combos import _linha_para_combo, gravar_itens_combo
+from app.routers.cupons import _linha_para_cupom
+from app.routers.promocoes import _linha_para_promocao_admin
 from app.websocket import gerenciador_admin
 
 EXTENSOES_IMAGEM_PERMITIDAS = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}
@@ -428,3 +443,275 @@ def atualizar_produto(
         (produto_id,),
     ).fetchone()
     return _linha_para_produto(linha)
+
+
+# ── Cupons ───────────────────────────────────────────────────────────────────
+
+
+@router.get("/cupons", response_model=list[CupomOut])
+def listar_cupons_admin(_admin: dict = Depends(get_admin_atual), db: psycopg.Connection = Depends(get_db)) -> list[CupomOut]:
+    linhas = db.execute("SELECT * FROM cupons ORDER BY criado_em DESC").fetchall()
+    return [_linha_para_cupom(linha) for linha in linhas]
+
+
+@router.post("/cupons", response_model=CupomOut, status_code=status.HTTP_201_CREATED)
+def criar_cupom(
+    dados: CupomCreateIn,
+    _admin: dict = Depends(exigir_papel_admin),
+    db: psycopg.Connection = Depends(get_db),
+) -> CupomOut:
+    try:
+        linha = db.execute(
+            """
+            INSERT INTO cupons
+              (codigo, tipo_desconto, valor, valor_minimo_pedido, limite_uso_total, limite_uso_por_usuario, valido_de, valido_ate, ativo)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+            """,
+            (
+                dados.codigo.strip().upper(),
+                dados.tipo_desconto,
+                dados.valor,
+                dados.valor_minimo_pedido,
+                dados.limite_uso_total,
+                dados.limite_uso_por_usuario,
+                dados.valido_de,
+                dados.valido_ate,
+                int(dados.ativo),
+            ),
+        ).fetchone()
+        db.commit()
+    except psycopg.IntegrityError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Já existe um cupom com esse código")
+
+    linha_completa = db.execute("SELECT * FROM cupons WHERE id = %s", (linha["id"],)).fetchone()
+    return _linha_para_cupom(linha_completa)
+
+
+COLUNAS_CUPOM_EDITAVEIS = {
+    "tipo_desconto",
+    "valor",
+    "valor_minimo_pedido",
+    "limite_uso_total",
+    "limite_uso_por_usuario",
+    "valido_de",
+    "valido_ate",
+    "ativo",
+}
+
+
+@router.patch("/cupons/{cupom_id}", response_model=CupomOut)
+def atualizar_cupom(
+    cupom_id: int,
+    dados: CupomUpdateIn,
+    _admin: dict = Depends(exigir_papel_admin),
+    db: psycopg.Connection = Depends(get_db),
+) -> CupomOut:
+    atual = db.execute("SELECT * FROM cupons WHERE id = %s", (cupom_id,)).fetchone()
+    if atual is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cupom não encontrado")
+
+    campos = dados.model_dump(exclude_unset=True)
+    desconhecidos = set(campos) - COLUNAS_CUPOM_EDITAVEIS
+    if desconhecidos:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Campos não editáveis: {', '.join(sorted(desconhecidos))}",
+        )
+
+    tipo_final = campos.get("tipo_desconto", atual["tipo_desconto"])
+    valor_final = campos.get("valor", atual["valor"])
+    if tipo_final == "percentual" and valor_final > 100:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Um cupom percentual não pode passar de 100%")
+
+    if campos:
+        if "ativo" in campos:
+            campos["ativo"] = int(campos["ativo"])
+        atribuicoes = ", ".join(f"{campo} = %s" for campo in campos)
+        db.execute(f"UPDATE cupons SET {atribuicoes} WHERE id = %s", (*campos.values(), cupom_id))
+        db.commit()
+
+    linha = db.execute("SELECT * FROM cupons WHERE id = %s", (cupom_id,)).fetchone()
+    return _linha_para_cupom(linha)
+
+
+# ── Promoções ────────────────────────────────────────────────────────────────
+
+
+@router.get("/promocoes", response_model=list[PromocaoAdminOut])
+def listar_promocoes_admin(
+    _admin: dict = Depends(get_admin_atual), db: psycopg.Connection = Depends(get_db)
+) -> list[PromocaoAdminOut]:
+    linhas = db.execute("SELECT * FROM promocoes ORDER BY ordem, id").fetchall()
+    return [_linha_para_promocao_admin(linha) for linha in linhas]
+
+
+@router.post("/promocoes", response_model=PromocaoAdminOut, status_code=status.HTTP_201_CREATED)
+def criar_promocao(
+    dados: PromocaoCreateIn,
+    _admin: dict = Depends(exigir_papel_admin),
+    db: psycopg.Connection = Depends(get_db),
+) -> PromocaoAdminOut:
+    linha = db.execute(
+        """
+        INSERT INTO promocoes (titulo, subtitulo, imagem_url, cupom_id, ordem, ativo, valido_de, valido_ate)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        RETURNING id
+        """,
+        (
+            dados.titulo,
+            dados.subtitulo,
+            dados.imagem_url,
+            dados.cupom_id,
+            dados.ordem,
+            int(dados.ativo),
+            dados.valido_de,
+            dados.valido_ate,
+        ),
+    ).fetchone()
+    db.commit()
+
+    linha_completa = db.execute("SELECT * FROM promocoes WHERE id = %s", (linha["id"],)).fetchone()
+    return _linha_para_promocao_admin(linha_completa)
+
+
+COLUNAS_PROMOCAO_EDITAVEIS = {"titulo", "subtitulo", "imagem_url", "cupom_id", "ordem", "ativo", "valido_de", "valido_ate"}
+
+
+@router.patch("/promocoes/{promocao_id}", response_model=PromocaoAdminOut)
+def atualizar_promocao(
+    promocao_id: int,
+    dados: PromocaoUpdateIn,
+    _admin: dict = Depends(exigir_papel_admin),
+    db: psycopg.Connection = Depends(get_db),
+) -> PromocaoAdminOut:
+    atual = db.execute("SELECT * FROM promocoes WHERE id = %s", (promocao_id,)).fetchone()
+    if atual is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Promoção não encontrada")
+
+    campos = dados.model_dump(exclude_unset=True)
+    desconhecidos = set(campos) - COLUNAS_PROMOCAO_EDITAVEIS
+    if desconhecidos:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Campos não editáveis: {', '.join(sorted(desconhecidos))}",
+        )
+
+    if campos:
+        if "ativo" in campos:
+            campos["ativo"] = int(campos["ativo"])
+        atribuicoes = ", ".join(f"{campo} = %s" for campo in campos)
+        db.execute(f"UPDATE promocoes SET {atribuicoes} WHERE id = %s", (*campos.values(), promocao_id))
+        db.commit()
+
+    linha = db.execute("SELECT * FROM promocoes WHERE id = %s", (promocao_id,)).fetchone()
+    return _linha_para_promocao_admin(linha)
+
+
+# ── Combos ───────────────────────────────────────────────────────────────────
+
+
+@router.get("/combos", response_model=list[ComboOut])
+def listar_combos_admin(_admin: dict = Depends(get_admin_atual), db: psycopg.Connection = Depends(get_db)) -> list[ComboOut]:
+    linhas = db.execute("SELECT * FROM combos ORDER BY id").fetchall()
+    return [_linha_para_combo(db, linha) for linha in linhas]
+
+
+@router.post("/combos", response_model=ComboOut, status_code=status.HTTP_201_CREATED)
+def criar_combo(
+    dados: ComboCreateIn,
+    _admin: dict = Depends(exigir_papel_admin),
+    db: psycopg.Connection = Depends(get_db),
+) -> ComboOut:
+    try:
+        linha = db.execute(
+            """
+            INSERT INTO combos (nome, slug, descricao, preco, imagem_url, disponivel)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id
+            """,
+            (dados.nome, dados.slug, dados.descricao, dados.preco, dados.imagem_url, int(dados.disponivel)),
+        ).fetchone()
+        gravar_itens_combo(db, linha["id"], dados.itens)
+        db.commit()
+    except psycopg.IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Já existe um combo com esse identificador (slug)")
+
+    linha_completa = db.execute("SELECT * FROM combos WHERE id = %s", (linha["id"],)).fetchone()
+    return _linha_para_combo(db, linha_completa)
+
+
+COLUNAS_COMBO_EDITAVEIS = {"nome", "descricao", "preco", "imagem_url", "disponivel"}
+
+
+@router.patch("/combos/{combo_id}", response_model=ComboOut)
+def atualizar_combo(
+    combo_id: int,
+    dados: ComboUpdateIn,
+    _admin: dict = Depends(exigir_papel_admin),
+    db: psycopg.Connection = Depends(get_db),
+) -> ComboOut:
+    atual = db.execute("SELECT * FROM combos WHERE id = %s", (combo_id,)).fetchone()
+    if atual is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Combo não encontrado")
+
+    campos = dados.model_dump(exclude_unset=True, exclude={"itens"})
+    desconhecidos = set(campos) - COLUNAS_COMBO_EDITAVEIS
+    if desconhecidos:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Campos não editáveis: {', '.join(sorted(desconhecidos))}",
+        )
+
+    if campos:
+        if "disponivel" in campos:
+            campos["disponivel"] = int(campos["disponivel"])
+        atribuicoes = ", ".join(f"{campo} = %s" for campo in campos)
+        db.execute(f"UPDATE combos SET {atribuicoes} WHERE id = %s", (*campos.values(), combo_id))
+
+    if dados.itens is not None:
+        gravar_itens_combo(db, combo_id, dados.itens)
+
+    db.commit()
+    linha = db.execute("SELECT * FROM combos WHERE id = %s", (combo_id,)).fetchone()
+    return _linha_para_combo(db, linha)
+
+
+# ── Avaliações (moderação) ────────────────────────────────────────────────────
+
+
+@router.get("/avaliacoes", response_model=list[AvaliacaoAdminOut])
+def listar_avaliacoes_admin(
+    _admin: dict = Depends(get_admin_atual), db: psycopg.Connection = Depends(get_db)
+) -> list[AvaliacaoAdminOut]:
+    linhas = db.execute(
+        """
+        SELECT a.*, u.nome AS usuario_nome
+        FROM avaliacoes a
+        JOIN usuarios u ON u.id = a.usuario_id
+        ORDER BY a.criado_em DESC
+        """
+    ).fetchall()
+    return [_linha_para_avaliacao_admin(linha) for linha in linhas]
+
+
+@router.patch("/avaliacoes/{avaliacao_id}", response_model=AvaliacaoAdminOut)
+def moderar_avaliacao(
+    avaliacao_id: int,
+    dados: AvaliacaoModeracaoIn,
+    _admin: dict = Depends(exigir_papel_admin),
+    db: psycopg.Connection = Depends(get_db),
+) -> AvaliacaoAdminOut:
+    atual = db.execute("SELECT * FROM avaliacoes WHERE id = %s", (avaliacao_id,)).fetchone()
+    if atual is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Avaliação não encontrada")
+
+    db.execute("UPDATE avaliacoes SET aprovado = %s WHERE id = %s", (int(dados.aprovado), avaliacao_id))
+    db.commit()
+
+    linha = db.execute(
+        "SELECT a.*, u.nome AS usuario_nome FROM avaliacoes a JOIN usuarios u ON u.id = a.usuario_id WHERE a.id = %s",
+        (avaliacao_id,),
+    ).fetchone()
+    return _linha_para_avaliacao_admin(linha)

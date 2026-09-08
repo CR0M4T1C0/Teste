@@ -82,6 +82,20 @@ def get_usuario_atual(
     return usuario
 
 
+def autenticar_cliente_websocket(token: str, db: psycopg.Connection) -> Optional[dict]:
+    """Mesma verificação de get_usuario_atual, mas devolvendo None em vez de
+    levantar HTTPException — usada no handshake dos WebSockets de cliente
+    (ex.: /ws/mesas-virtuais/{id}), que recebem o token por query param (o
+    navegador não permite header Authorization numa conexão WebSocket
+    nativa). Ver autenticar_admin_websocket, em auth_admin.py, para o
+    equivalente do lado do painel administrativo."""
+    try:
+        claims = _decodificar_token_cliente(token)
+    except HTTPException:
+        return None
+    return db.execute("SELECT * FROM usuarios WHERE id = %s", (claims["sub"],)).fetchone()
+
+
 def get_usuario_opcional(
     credenciais: Optional[HTTPAuthorizationCredentials] = Depends(_bearer_scheme),
     db: psycopg.Connection = Depends(get_db),

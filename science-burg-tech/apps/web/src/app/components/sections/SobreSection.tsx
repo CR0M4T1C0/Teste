@@ -1,7 +1,7 @@
 import { Code2, Cpu, FlaskConical, UtensilsCrossed } from "lucide-react";
 import { ImageWithFallback } from "@/app/components/figma/ImageWithFallback";
 import { FadeUp } from "@/app/components/common/FadeUp";
-import salaoFoto from "@/imports/salao.webp";
+import salaoPng from "@/imports/1000217326.png";
 
 const STATS = [["2020", "Fundada"], ["14", "Receitas"], ["4.9★", "iFood"]];
 
@@ -17,7 +17,7 @@ export function SobreSection() {
       <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-2 gap-14 items-center">
         <FadeUp>
           <div className="relative rounded-3xl overflow-hidden bg-secondary border border-border shadow-2xl">
-            <ImageWithFallback src={salaoFoto} alt="Salão Science Burg Tech com mesas interativas e neons" className="w-full h-[420px] object-cover" />
+            <ImageWithFallback src={salaoPng} alt="Salão Science Burg Tech com mesas interativas e neons" className="w-full h-[420px] object-cover" />
             <div className="absolute inset-0 bg-gradient-to-t from-background/60 to-transparent" />
             {/* Badge overlay */}
             <div className="absolute bottom-5 left-5 right-5">

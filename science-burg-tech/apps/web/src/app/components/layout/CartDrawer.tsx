@@ -1,9 +1,17 @@
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { Check, MapPin, Minus, Plus, ShoppingCart, X } from "lucide-react";
+import { Check, MapPin, Minus, Plus, ShoppingCart, Ticket, X } from "lucide-react";
 import { Link } from "react-router";
 import { useClienteAuth } from "@/app/hooks/useClienteAuth";
-import { ApiError, buscarEnderecoPorCep, criarPedido, getMeusEnderecos, type EnderecoApi } from "@/app/lib/api";
+import {
+  ApiError,
+  buscarEnderecoPorCep,
+  criarPedido,
+  getMeusEnderecos,
+  validarCupom,
+  type EnderecoApi,
+  type ItemPedidoCreateIn,
+} from "@/app/lib/api";
 import type { Pedido } from "@/app/types";
 
 type Etapa = "carrinho" | "checkout" | "sucesso";
@@ -24,7 +32,7 @@ export function CartDrawer({
   cart: Pedido[];
   totalQty: number;
   totalPrc: number;
-  onChangeQty: (id: number, d: number) => void;
+  onChangeQty: (id: number, tipo: "produto" | "combo", d: number) => void;
   onClearCart: () => void;
 }) {
   const { usuario, token } = useClienteAuth();
@@ -34,6 +42,11 @@ export function CartDrawer({
   const [metodoPagamento, setMetodoPagamento] = useState("pix");
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+
+  const [codigoCupom, setCodigoCupom] = useState("");
+  const [cupomAplicado, setCupomAplicado] = useState<{ codigo: string; desconto: number } | null>(null);
+  const [erroCupom, setErroCupom] = useState<string | null>(null);
+  const [validandoCupom, setValidandoCupom] = useState(false);
 
   const [enderecosSalvos, setEnderecosSalvos] = useState<EnderecoApi[] | null>(null);
   const [enderecoSelecionadoId, setEnderecoSelecionadoId] = useState<number | "novo" | null>(null);
@@ -63,7 +76,36 @@ export function CartDrawer({
       setEndereco(CAMPO_ENDERECO_VAZIO);
       setEnderecosSalvos(null);
       setEnderecoSelecionadoId(null);
+      setCodigoCupom("");
+      setCupomAplicado(null);
+      setErroCupom(null);
     }, 250);
+  };
+
+  const aplicarCupom = async () => {
+    if (!token || !codigoCupom.trim()) return;
+    setValidandoCupom(true);
+    setErroCupom(null);
+    try {
+      const resultado = await validarCupom(token, { codigo: codigoCupom.trim(), subtotal: totalPrc });
+      if (resultado.valido && resultado.codigo) {
+        setCupomAplicado({ codigo: resultado.codigo, desconto: resultado.desconto });
+      } else {
+        setCupomAplicado(null);
+        setErroCupom(resultado.motivo || "Cupom inválido");
+      }
+    } catch (err) {
+      setCupomAplicado(null);
+      setErroCupom(err instanceof ApiError ? err.message : "Não foi possível validar o cupom agora.");
+    } finally {
+      setValidandoCupom(false);
+    }
+  };
+
+  const removerCupom = () => {
+    setCupomAplicado(null);
+    setCodigoCupom("");
+    setErroCupom(null);
   };
 
   const buscarCep = async (cep: string) => {
@@ -83,12 +125,16 @@ export function CartDrawer({
     setErro(null);
     setEnviando(true);
     try {
+      const itens: ItemPedidoCreateIn[] = cart.map((i) =>
+        i.tipo === "combo" ? { combo_id: i.id, quantidade: i.qty } : { produto_id: i.id, quantidade: i.qty },
+      );
       await criarPedido(token, {
         tipo,
-        itens: cart.map((i) => ({ produto_id: i.id, quantidade: i.qty })),
+        itens,
         endereco: tipo === "entrega" && enderecoSelecionadoId === "novo" ? endereco : undefined,
         endereco_id: tipo === "entrega" && typeof enderecoSelecionadoId === "number" ? enderecoSelecionadoId : undefined,
         metodo_pagamento: metodoPagamento,
+        codigo_cupom: cupomAplicado?.codigo,
       });
       onClearCart();
       setEtapa("sucesso");
@@ -260,6 +306,40 @@ export function CartDrawer({
               </select>
             </div>
 
+            <div>
+              <p className="text-xs font-bold text-foreground mb-1.5" style={{ fontFamily: "'Bricolage Grotesque',sans-serif" }}>
+                Cupom de desconto
+              </p>
+              {cupomAplicado ? (
+                <div className="flex items-center justify-between gap-2 bg-accent/10 border border-accent/30 rounded-xl px-3.5 py-2.5">
+                  <span className="flex items-center gap-1.5 text-xs font-bold text-accent" style={{ fontFamily: "'JetBrains Mono',monospace" }}>
+                    <Ticket size={13} /> {cupomAplicado.codigo} aplicado — -R$ {cupomAplicado.desconto.toFixed(2).replace(".", ",")}
+                  </span>
+                  <button type="button" onClick={removerCupom} className="text-muted-foreground hover:text-foreground">
+                    <X size={14} />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    value={codigoCupom}
+                    onChange={(e) => setCodigoCupom(e.target.value)}
+                    placeholder="Ex: BEMVINDO10"
+                    className="flex-1 min-w-0 bg-secondary border border-border rounded-xl px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary transition-colors uppercase"
+                  />
+                  <button
+                    type="button"
+                    onClick={aplicarCupom}
+                    disabled={!codigoCupom.trim() || validandoCupom}
+                    className="px-4 py-2.5 rounded-xl text-sm font-bold border border-border text-foreground hover:bg-secondary transition-colors disabled:opacity-50 flex-shrink-0"
+                  >
+                    {validandoCupom ? "..." : "Aplicar"}
+                  </button>
+                </div>
+              )}
+              {erroCupom && <p className="mt-1.5 text-xs text-destructive">{erroCupom}</p>}
+            </div>
+
             {erro && <p className="text-xs text-destructive bg-destructive/10 border border-destructive/30 rounded-xl px-3 py-2">{erro}</p>}
           </div>
         ) : (
@@ -275,7 +355,7 @@ export function CartDrawer({
             ) : (
               cart.map((item) => (
                 <motion.div
-                  key={item.id}
+                  key={`${item.tipo}-${item.id}`}
                   layout
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
@@ -289,7 +369,7 @@ export function CartDrawer({
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <button
-                      onClick={() => onChangeQty(item.id, -1)}
+                      onClick={() => onChangeQty(item.id, item.tipo, -1)}
                       className="w-7 h-7 rounded-lg bg-card border border-border flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
                     >
                       <Minus size={12} />
@@ -298,7 +378,7 @@ export function CartDrawer({
                       {item.qty}
                     </span>
                     <button
-                      onClick={() => onChangeQty(item.id, +1)}
+                      onClick={() => onChangeQty(item.id, item.tipo, +1)}
                       className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center text-white hover:bg-primary/90 transition-colors"
                     >
                       <Plus size={12} />
@@ -323,10 +403,16 @@ export function CartDrawer({
               <span>Entrega</span>
               <span className="text-accent font-bold">Grátis</span>
             </div>
+            {etapa === "checkout" && cupomAplicado && (
+              <div className="flex justify-between text-sm text-accent">
+                <span>Cupom {cupomAplicado.codigo}</span>
+                <span className="font-bold">-R$ {cupomAplicado.desconto.toFixed(2).replace(".", ",")}</span>
+              </div>
+            )}
             <div className="flex justify-between font-bold border-t border-border pt-3">
               <span style={{ fontFamily: "'Bricolage Grotesque',sans-serif" }}>Total</span>
               <span className="text-2xl text-primary" style={{ fontFamily: "'Bricolage Grotesque',sans-serif" }}>
-                R$ {totalPrc.toFixed(2).replace(".", ",")}
+                R$ {Math.max(totalPrc - (etapa === "checkout" && cupomAplicado ? cupomAplicado.desconto : 0), 0).toFixed(2).replace(".", ",")}
               </span>
             </div>
 

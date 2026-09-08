@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.auth_cliente import get_usuario_atual
 from app.db import get_db
+from app.routers.cupons import calcular_cupom
 from app.schemas import ItemPedidoIn, ItemPedidoOut, PedidoCreateIn, PedidoOut
 from app.websocket import gerenciador_admin
 
@@ -14,29 +15,56 @@ TAXA_ENTREGA = 0.0
 
 
 def _carregar_itens(db: psycopg.Connection, itens_in: list[ItemPedidoIn]) -> tuple[list[dict], float]:
+    """Carrega cada linha do pedido — um produto avulso ou um combo — a
+    partir do banco (nunca confiando no preço/nome que o front-end mandou,
+    só no id) e devolve as linhas prontas pra gravar mais o subtotal total.
+    """
     itens_carregados: list[dict] = []
     subtotal = 0.0
 
     for item in itens_in:
-        produto = db.execute(
-            "SELECT * FROM produtos WHERE id = %s AND disponivel = 1", (item.produto_id,)
-        ).fetchone()
-        if produto is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Produto {item.produto_id} não existe ou não está disponível",
+        if item.combo_id is not None:
+            combo = db.execute(
+                "SELECT * FROM combos WHERE id = %s AND disponivel = 1", (item.combo_id,)
+            ).fetchone()
+            if combo is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Combo {item.combo_id} não existe ou não está disponível",
+                )
+            item_subtotal = combo["preco"] * item.quantidade
+            subtotal += item_subtotal
+            itens_carregados.append(
+                {
+                    "produto_id": None,
+                    "combo_id": combo["id"],
+                    "nome_produto": combo["nome"],
+                    "preco_unitario": combo["preco"],
+                    "quantidade": item.quantidade,
+                    "subtotal": item_subtotal,
+                }
             )
-        item_subtotal = produto["preco"] * item.quantidade
-        subtotal += item_subtotal
-        itens_carregados.append(
-            {
-                "produto_id": produto["id"],
-                "nome_produto": produto["nome"],
-                "preco_unitario": produto["preco"],
-                "quantidade": item.quantidade,
-                "subtotal": item_subtotal,
-            }
-        )
+        else:
+            produto = db.execute(
+                "SELECT * FROM produtos WHERE id = %s AND disponivel = 1", (item.produto_id,)
+            ).fetchone()
+            if produto is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Produto {item.produto_id} não existe ou não está disponível",
+                )
+            item_subtotal = produto["preco"] * item.quantidade
+            subtotal += item_subtotal
+            itens_carregados.append(
+                {
+                    "produto_id": produto["id"],
+                    "combo_id": None,
+                    "nome_produto": produto["nome"],
+                    "preco_unitario": produto["preco"],
+                    "quantidade": item.quantidade,
+                    "subtotal": item_subtotal,
+                }
+            )
 
     return itens_carregados, subtotal
 
@@ -46,16 +74,25 @@ def _salvar_itens_pedido(db: psycopg.Connection, pedido_id: int, itens: list[dic
     for item in itens:
         linha = db.execute(
             """
-            INSERT INTO itens_pedido (pedido_id, produto_id, nome_produto, preco_unitario, quantidade, subtotal)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO itens_pedido (pedido_id, produto_id, combo_id, nome_produto, preco_unitario, quantidade, subtotal)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
-            (pedido_id, item["produto_id"], item["nome_produto"], item["preco_unitario"], item["quantidade"], item["subtotal"]),
+            (
+                pedido_id,
+                item["produto_id"],
+                item.get("combo_id"),
+                item["nome_produto"],
+                item["preco_unitario"],
+                item["quantidade"],
+                item["subtotal"],
+            ),
         ).fetchone()
         itens_out.append(
             ItemPedidoOut(
                 id=linha["id"],
                 produto_id=item["produto_id"],
+                combo_id=item.get("combo_id"),
                 nome_produto=item["nome_produto"],
                 preco_unitario=item["preco_unitario"],
                 quantidade=item["quantidade"],
@@ -71,6 +108,7 @@ def _linha_para_pedido(db: psycopg.Connection, linha: dict) -> PedidoOut:
         ItemPedidoOut(
             id=i["id"],
             produto_id=i["produto_id"],
+            combo_id=i["combo_id"],
             nome_produto=i["nome_produto"],
             preco_unitario=i["preco_unitario"],
             quantidade=i["quantidade"],
@@ -78,6 +116,14 @@ def _linha_para_pedido(db: psycopg.Connection, linha: dict) -> PedidoOut:
         )
         for i in itens_linhas
     ]
+
+    cupom_codigo = None
+    if linha["cupom_id"] is not None:
+        cupom = db.execute("SELECT codigo FROM cupons WHERE id = %s", (linha["cupom_id"],)).fetchone()
+        cupom_codigo = cupom["codigo"] if cupom else None
+
+    avaliacao = db.execute("SELECT id FROM avaliacoes WHERE pedido_id = %s", (linha["id"],)).fetchone()
+
     return PedidoOut(
         id=linha["id"],
         tipo=linha["tipo"],
@@ -85,10 +131,13 @@ def _linha_para_pedido(db: psycopg.Connection, linha: dict) -> PedidoOut:
         metodo_pagamento=linha["metodo_pagamento"],
         subtotal=linha["subtotal"],
         taxa_entrega=linha["taxa_entrega"],
+        desconto=linha["desconto"],
+        cupom_codigo=cupom_codigo,
         total=linha["total"],
         observacoes=linha["observacoes"],
         criado_em=linha["criado_em"],
         itens=itens,
+        avaliacao_id=avaliacao["id"] if avaliacao else None,
     )
 
 
@@ -130,19 +179,49 @@ async def criar_pedido(
             endereco_id = linha_endereco["id"]
         taxa_entrega = TAXA_ENTREGA
 
-    total = subtotal + taxa_entrega
+    cupom_id = None
+    desconto = 0.0
+    if dados.codigo_cupom:
+        # Recalcula do zero, com os dados de agora — nunca confiamos num
+        # desconto que o front-end mandou (o front só usa /cupons/validar
+        # pra mostrar uma prévia antes de confirmar).
+        resultado_cupom = calcular_cupom(db, dados.codigo_cupom, usuario["id"], subtotal)
+        if not resultado_cupom.valido:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=resultado_cupom.motivo or "Cupom inválido")
+        cupom_id = resultado_cupom.cupom_id
+        desconto = resultado_cupom.desconto
+
+    total = max(subtotal + taxa_entrega - desconto, 0.0)
 
     linha_pedido = db.execute(
         """
-        INSERT INTO pedidos (usuario_id, tipo, endereco_id, metodo_pagamento, subtotal, taxa_entrega, total, observacoes)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO pedidos (usuario_id, tipo, endereco_id, metodo_pagamento, subtotal, taxa_entrega, desconto, cupom_id, total, observacoes)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         RETURNING id
         """,
-        (usuario["id"], dados.tipo, endereco_id, dados.metodo_pagamento, subtotal, taxa_entrega, total, dados.observacoes),
+        (
+            usuario["id"],
+            dados.tipo,
+            endereco_id,
+            dados.metodo_pagamento,
+            subtotal,
+            taxa_entrega,
+            desconto,
+            cupom_id,
+            total,
+            dados.observacoes,
+        ),
     ).fetchone()
     pedido_id = linha_pedido["id"]
 
     _salvar_itens_pedido(db, pedido_id, itens_carregados)
+
+    if cupom_id is not None:
+        db.execute(
+            "INSERT INTO cupons_uso (cupom_id, usuario_id, pedido_id) VALUES (%s, %s, %s)",
+            (cupom_id, usuario["id"], pedido_id),
+        )
+
     db.commit()
 
     pedido = db.execute("SELECT * FROM pedidos WHERE id = %s", (pedido_id,)).fetchone()

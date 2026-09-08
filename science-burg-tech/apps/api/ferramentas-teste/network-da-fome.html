@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>🍔 Teste — Network da Fome</title>
+<style>
+  :root {
+    --bg: #0b0e14;
+    --card: #11151d;
+    --border: #232838;
+    --text: #e9edf5;
+    --muted: #8891a5;
+    --primary: #ff5e1a;
+    --accent: #00e5a0;
+    --danger: #ff4d5e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", Inter, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p.sub { color: var(--muted); font-size: 13px; margin: 0 0 24px; }
+  .grid { display: grid; grid-template-columns: 320px 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 0 0 12px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; margin-top: 10px; }
+  input, textarea, select {
+    width: 100%;
+    background: #0f1420;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    color: var(--text);
+    font-size: 13px;
+  }
+  button {
+    cursor: pointer;
+    border: none;
+    border-radius: 8px;
+    padding: 9px 14px;
+    font-size: 13px;
+    font-weight: 700;
+    margin-top: 10px;
+  }
+  button.primary { background: var(--primary); color: white; }
+  button.secondary { background: #1a2030; color: var(--text); border: 1px solid var(--border); }
+  button.danger { background: rgba(255,77,94,0.15); color: var(--danger); border: 1px solid rgba(255,77,94,0.3); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  button + button { margin-left: 6px; }
+  .status { font-size: 12px; padding: 8px 10px; border-radius: 8px; margin-top: 10px; }
+  .status.ok { background: rgba(0,229,160,0.12); color: var(--accent); }
+  .status.err { background: rgba(255,77,94,0.12); color: var(--danger); }
+  .mesa-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px; border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; font-size: 13px;
+  }
+  .mesa-row .info { display: flex; flex-direction: column; gap: 2px; }
+  .mesa-row .info b { font-size: 13px; }
+  .mesa-row .info span { font-size: 11px; color: var(--muted); }
+  .pill { font-size: 10px; padding: 2px 8px; border-radius: 999px; background: #1a2030; color: var(--muted); }
+  .pill.livre { color: var(--accent); background: rgba(0,229,160,0.12); }
+  .pill.cheia { color: var(--danger); background: rgba(255,77,94,0.12); }
+  #chatBox { height: 320px; overflow-y: auto; background: #0f1420; border: 1px solid var(--border); border-radius: 10px; padding: 10px; margin-bottom: 10px; }
+  .msg { font-size: 13px; margin-bottom: 8px; }
+  .msg b { color: var(--primary); }
+  .msg.sistema { color: var(--muted); font-style: italic; }
+  .lugares { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .lugar { width: 54px; text-align: center; font-size: 10px; color: var(--muted); }
+  .lugar .bolha {
+    width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; color: white; margin: 0 auto 4px; background: #1a2030; border: 2px dashed var(--border);
+  }
+  .lugar.ocupado .bolha { border-style: solid; }
+  code { background: #1a2030; padding: 1px 5px; border-radius: 4px; font-size: 11px; }
+</style>
+</head>
+<body>
+
+<h1>🍔 Network da Fome — painel de teste</h1>
+<p class="sub">
+  Página avulsa, sem build, só para validar a API rapidamente — abra em duas abas (ou dois navegadores) logadas com
+  usuários diferentes para testar o tempo real de verdade.
+</p>
+
+<div class="grid">
+  <!-- Coluna esquerda: conexão + conta -->
+  <div>
+    <div class="card">
+      <h2>1. Servidor</h2>
+      <label>URL da API</label>
+      <input id="apiBase" value="http://localhost:8000" />
+    </div>
+
+    <div class="card">
+      <h2>2. Conta</h2>
+      <label>Nome (só p/ registrar)</label>
+      <input id="nome" value="Convidado Teste" />
+      <label>E-mail</label>
+      <input id="email" value="convidado@teste.com" />
+      <label>Senha</label>
+      <input id="senha" type="password" value="senha1234" />
+      <div>
+        <button class="primary" onclick="registrar()">Registrar</button>
+        <button class="secondary" onclick="login()">Entrar</button>
+      </div>
+      <div id="statusConta"></div>
+    </div>
+
+    <div class="card" id="cardBloqueios" style="display:none">
+      <h2>Bloqueios</h2>
+      <div id="listaBloqueios" style="font-size:12px;color:var(--muted)">—</div>
+    </div>
+  </div>
+
+  <!-- Coluna direita: salão + mesa -->
+  <div>
+    <div class="card" id="cardSalao">
+      <h2>3. Salão virtual</h2>
+      <button class="secondary" onclick="listarMesas()">🔄 Atualizar mesas</button>
+      <div id="listaMesas" style="margin-top:12px"></div>
+    </div>
+
+    <div class="card" id="cardMesa" style="display:none">
+      <h2 id="tituloMesa">Mesa</h2>
+      <div class="lugares" id="lugares"></div>
+
+      <div id="chatBox"></div>
+      <div style="display:flex; gap:8px;">
+        <input id="textoMsg" placeholder="Escreva uma mensagem…" onkeydown="if(event.key==='Enter') enviarMensagem()" />
+        <button class="primary" onclick="enviarMensagem()" style="margin-top:0">Enviar</button>
+      </div>
+
+      <div style="margin-top:14px; display:flex; gap:6px; flex-wrap:wrap;">
+        <button class="secondary" onclick="sairDaMesa()">🚪 Sair da mesa</button>
+        <button class="secondary" onclick="denunciarPrompt()">⚠️ Denunciar alguém</button>
+        <button class="secondary" onclick="bloquearPrompt()">🚫 Bloquear alguém</button>
+      </div>
+      <div id="statusMesa"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let token = null;
+  let usuario = null;
+  let ws = null;
+  let mesaAtual = null;
+
+  const apiBase = () => document.getElementById("apiBase").value.replace(/\/$/, "");
+
+  function mostrarStatus(elId, texto, ok) {
+    const el = document.getElementById(elId);
+    el.innerHTML = `<div class="status ${ok ? "ok" : "err"}">${texto}</div>`;
+  }
+
+  async function api(path, opts = {}) {
+    const resp = await fetch(apiBase() + "/api" + path, {
+      ...opts,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: "Bearer " + token } : {}),
+        ...(opts.headers || {}),
+      },
+    });
+    if (resp.status === 204) return null;
+    const dados = await resp.json().catch(() => null);
+    if (!resp.ok) throw new Error((dados && dados.detail) || `Erro ${resp.status}`);
+    return dados;
+  }
+
+  async function registrar() {
+    try {
+      const dados = await api("/auth/registo", {
+        method: "POST",
+        body: JSON.stringify({
+          nome: document.getElementById("nome").value,
+          email: document.getElementById("email").value,
+          senha: document.getElementById("senha").value,
+          telefone: "11999990000",
+        }),
+      });
+      aoLogar(dados);
+    } catch (e) {
+      mostrarStatus("statusConta", "Registro falhou (talvez já exista — tente 'Entrar'): " + e.message, false);
+    }
+  }
+
+  async function login() {
+    try {
+      const dados = await api("/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ email: document.getElementById("email").value, senha: document.getElementById("senha").value }),
+      });
+      aoLogar(dados);
+    } catch (e) {
+      mostrarStatus("statusConta", "Login falhou: " + e.message, false);
+    }
+  }
+
+  function aoLogar(dados) {
+    token = dados.access_token;
+    usuario = dados.usuario;
+    mostrarStatus("statusConta", `Logado como <b>${usuario.nome}</b> (id ${usuario.id})`, true);
+    document.getElementById("cardBloqueios").style.display = "block";
+    listarMesas();
+    carregarBloqueios();
+    // Se a pessoa já estava sentada em alguma mesa (ex.: F5 na página), volta pra ela.
+    api("/mesas-virtuais/minha-mesa").then((mesa) => {
+      if (mesa) entrarNaMesaUI(mesa);
+    }).catch(() => {});
+  }
+
+  async function listarMesas() {
+    try {
+      const mesas = await api("/mesas-virtuais");
+      const container = document.getElementById("listaMesas");
+      container.innerHTML = "";
+      mesas.forEach((mesa) => {
+        const div = document.createElement("div");
+        div.className = "mesa-row";
+        div.innerHTML = `
+          <div class="info">
+            <b>${mesa.nome}</b>
+            <span>${mesa.tema ?? "papo livre"} · ${mesa.lugares_ocupados}/${mesa.capacidade}</span>
+          </div>
+          <div>
+            <span class="pill ${mesa.cheia ? "cheia" : "livre"}">${mesa.cheia ? "lotada" : "livre"}</span>
+            <button class="primary" ${mesa.cheia ? "disabled" : ""} onclick="sentar(${mesa.id})">Sentar</button>
+          </div>`;
+        container.appendChild(div);
+      });
+    } catch (e) {
+      document.getElementById("listaMesas").innerHTML = `<div class="status err">${e.message}</div>`;
+    }
+  }
+
+  async function sentar(mesaId) {
+    if (!token) return alert("Entre com uma conta primeiro.");
+    try {
+      const detalhe = await api(`/mesas-virtuais/${mesaId}/sentar`, { method: "POST", body: JSON.stringify({}) });
+      entrarNaMesaUI(detalhe);
+    } catch (e) {
+      alert("Não foi possível sentar: " + e.message);
+      listarMesas();
+    }
+  }
+
+  function entrarNaMesaUI(detalhe) {
+    mesaAtual = detalhe;
+    document.getElementById("cardMesa").style.display = "block";
+    document.getElementById("tituloMesa").textContent = `🍔 ${detalhe.nome}`;
+    renderizarLugares(detalhe);
+    document.getElementById("chatBox").innerHTML = "";
+    carregarHistorico(detalhe.id);
+    conectarWebSocket(detalhe.id);
+  }
+
+  function renderizarLugares(detalhe) {
+    const el = document.getElementById("lugares");
+    el.innerHTML = "";
+    detalhe.lugares.forEach((lugar) => {
+      const div = document.createElement("div");
+      div.className = "lugar" + (lugar.participante ? " ocupado" : "");
+      const iniciais = lugar.participante ? lugar.participante.nome.slice(0, 2).toUpperCase() : "";
+      div.innerHTML = `<div class="bolha">${iniciais}</div><div>${lugar.participante ? (lugar.participante.usuario_id === usuario.id ? "Você" : lugar.participante.nome) : "livre"}</div>`;
+      el.appendChild(div);
+    });
+  }
+
+  async function carregarHistorico(mesaId) {
+    try {
+      const mensagens = await api(`/mesas-virtuais/${mesaId}/mensagens`);
+      mensagens.forEach(adicionarMensagemUI);
+    } catch (e) {
+      // sem histórico ainda, tudo bem
+    }
+  }
+
+  function conectarWebSocket(mesaId) {
+    if (ws) ws.close();
+    const protocolo = apiBase().startsWith("https") ? "wss" : "ws";
+    const host = apiBase().replace(/^https?:\/\//, "");
+    ws = new WebSocket(`${protocolo}://${host}/ws/mesas-virtuais/${mesaId}?token=${encodeURIComponent(token)}`);
+
+    ws.onopen = () => mostrarStatus("statusMesa", "🟢 Conectado ao chat em tempo real", true);
+    ws.onclose = () => mostrarStatus("statusMesa", "🔴 Desconectado (tentando reconectar…)", false);
+    ws.onmessage = (evento) => {
+      const payload = JSON.parse(evento.data);
+      if (payload.evento === "mensagem") {
+        adicionarMensagemUI(payload.dados);
+      } else if (payload.evento === "participante_sentou") {
+        adicionarSistemaUI(`${payload.dados.nome} sentou na mesa`);
+        api(`/mesas-virtuais/${mesaId}`).then(renderizarLugares);
+      } else if (payload.evento === "participante_saiu") {
+        adicionarSistemaUI(`Alguém saiu da mesa`);
+        api(`/mesas-virtuais/${mesaId}`).then(renderizarLugares);
+      } else if (payload.evento === "mensagem_removida") {
+        adicionarSistemaUI(`Uma mensagem foi removida pela moderação`);
+      } else if (payload.evento === "removido") {
+        alert("Você foi removido da mesa: " + payload.dados.motivo);
+        location.reload();
+      } else if (payload.evento === "erro") {
+        adicionarSistemaUI("⚠️ " + payload.dados.mensagem);
+      }
+    };
+  }
+
+  function adicionarMensagemUI(msg) {
+    const box = document.getElementById("chatBox");
+    const div = document.createElement("div");
+    div.className = "msg";
+    div.innerHTML = `<b>${msg.usuario_id === usuario.id ? "Você" : msg.nome}:</b> ${escaparHtml(msg.texto)}`;
+    box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function adicionarSistemaUI(texto) {
+    const box = document.getElementById("chatBox");
+    const div = document.createElement("div");
+    div.className = "msg sistema";
+    div.textContent = texto;
+    box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function escaparHtml(txt) {
+    const d = document.createElement("div");
+    d.textContent = txt;
+    return d.innerHTML;
+  }
+
+  function enviarMensagem() {
+    const input = document.getElementById("textoMsg");
+    const texto = input.value.trim();
+    if (!texto || !ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ tipo: "chat", texto }));
+    input.value = "";
+  }
+
+  async function sairDaMesa() {
+    if (!mesaAtual) return;
+    try {
+      await api(`/mesas-virtuais/${mesaAtual.id}/sair`, { method: "POST" });
+      if (ws) ws.close();
+      mesaAtual = null;
+      document.getElementById("cardMesa").style.display = "none";
+      listarMesas();
+    } catch (e) {
+      alert("Erro ao sair: " + e.message);
+    }
+  }
+
+  async function denunciarPrompt() {
+    const idAlvo = prompt("ID do usuário a denunciar (veja os ids sentados na mesa):");
+    if (!idAlvo) return;
+    const motivo = prompt("Motivo da denúncia:") || "Comportamento inadequado";
+    try {
+      await api(`/mesas-virtuais/${mesaAtual.id}/denunciar`, {
+        method: "POST",
+        body: JSON.stringify({ denunciado_usuario_id: Number(idAlvo), motivo }),
+      });
+      alert("Denúncia registrada.");
+    } catch (e) {
+      alert("Erro: " + e.message);
+    }
+  }
+
+  async function bloquearPrompt() {
+    const idAlvo = prompt("ID do usuário a bloquear:");
+    if (!idAlvo) return;
+    try {
+      await api("/mesas-virtuais/bloqueios", { method: "POST", body: JSON.stringify({ bloqueado_usuario_id: Number(idAlvo) }) });
+      carregarBloqueios();
+    } catch (e) {
+      alert("Erro: " + e.message);
+    }
+  }
+
+  async function carregarBloqueios() {
+    try {
+      const bloqueios = await api("/mesas-virtuais/bloqueios/listar");
+      document.getElementById("listaBloqueios").innerHTML =
+        bloqueios.length === 0 ? "Nenhum bloqueio." : bloqueios.map((b) => `${b.nome} (id ${b.usuario_id})`).join("<br>");
+    } catch (e) {
+      // ignora
+    }
+  }
+</script>
+</body>
+</html>

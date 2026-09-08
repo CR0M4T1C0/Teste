@@ -1,4 +1,0 @@
-# Reserva: se o netlify.toml não for lido (deploy manual por arrastar a
-# pasta dist, por exemplo), esta regra garante que as rotas do React
-# continuem funcionando ao atualizar a página.
-/*  /index.html  200

@@ -7,6 +7,7 @@ import { useScrolled } from "@/app/hooks/useScrolled";
 
 const NAV_LINKS: [string, string][] = [
   ["/cardapio", "Cardápio"],
+  ["/network-da-fome", "🍔 Network da Fome"],
   ["/sobre", "Sobre Nós"],
   ["/localizacao", "Localização"],
   ["/pedidos", "Meus Pedidos"],

@@ -106,6 +106,7 @@ if not DATABASE_URL:
     raise SystemExit(1)
 
 SCHEMA_PATH = API_DIR / "database" / "schema.sql"
+MIGRATIONS_DIR = API_DIR / "database" / "migrations"
 
 # Onde ficam as fotos dos produtos enviadas pelo painel admin (servidas como
 # arquivo estático em /uploads — veja main.py)
@@ -127,3 +128,16 @@ if EH_PRODUCAO and "*" in CORS_ORIGINS:
         file=sys.stderr,
     )
     raise SystemExit(1)
+
+
+# ── G.P.T. (Grill Potato Toast) — atendente virtual ─────────────────────────
+# A chave fica só aqui, no servidor. Se estivesse no front-end, qualquer
+# visitante a leria no DevTools e a usaria por conta própria — e a fatura
+# viria para o projeto.
+#
+# Sem IA_CHAVE definida, o atendente simplesmente não aparece no site. O
+# resto do sistema funciona igual: ele é um extra, não um pilar.
+IA_PROVEDOR = _env("IA_PROVEDOR", "gemini").strip().lower()
+IA_CHAVE = os.getenv("IA_CHAVE", "").strip()
+IA_MODELO = _env("IA_MODELO", "gemini-2.0-flash")
+IA_TIMEOUT_SEGUNDOS = int(_env("IA_TIMEOUT_SEGUNDOS", "20"))

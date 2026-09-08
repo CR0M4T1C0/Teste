@@ -5,7 +5,7 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
-from app.config import DATABASE_URL, SCHEMA_PATH
+from app.config import DATABASE_URL, MIGRATIONS_DIR, SCHEMA_PATH
 
 # Linhas voltam como dict (linha["campo"]) — o mesmo jeito de acessar que o
 # sqlite3.Row já dava, então nenhum router precisou mudar por causa disso.
@@ -28,11 +28,17 @@ def _conectar() -> psycopg.Connection:
 
 
 def inicializar_banco() -> None:
-    """Aplica o schema.sql se as tabelas ainda não existirem no banco.
+    """Aplica o schema.sql (só em banco vazio) e depois qualquer migração de
+    database/migrations/ que ainda não tenha rodado nesta branch/banco.
 
-    As tabelas nunca são criadas via ORM — sempre a partir do schema.sql,
-    que é a única fonte da verdade (contém os triggers e o índice único
-    parcial que implementam as regras de negócio do sistema de mesas).
+    As tabelas nunca são criadas via ORM — sempre a partir de SQL puro, que é
+    a única fonte da verdade (contém os triggers e o índice único parcial que
+    implementam as regras de negócio do sistema de mesas). O schema.sql é só
+    a fundação histórica (o estado em que o banco nasceu); qualquer mudança
+    de schema a partir de agora vira um arquivo novo em migrations/, nunca
+    mais uma edição direta no schema.sql — senão bancos que já existem (como
+    as branches "production" e "test" de vocês) nunca receberiam a mudança,
+    já que este bloco só roda o schema.sql uma vez, em banco vazio.
     """
     conn = _conectar()
     try:
@@ -42,8 +48,40 @@ def inicializar_banco() -> None:
             conn.execute(schema_sql)
             conn.commit()
             _rotacionar_qr_tokens_do_seed(conn)
+
+        _aplicar_migracoes_pendentes(conn)
     finally:
         conn.close()
+
+
+def _aplicar_migracoes_pendentes(conn: psycopg.Connection) -> None:
+    """Roda, em ordem alfabética/numérica, os arquivos .sql de
+    database/migrations/ que ainda não constam na tabela _migrations deste
+    banco. Cada arquivo roda e é registrado na sua própria transação — se um
+    falhar, os anteriores continuam válidos e a próxima subida da API tenta
+    de novo só o que faltou (não fica reaplicando o que já deu certo)."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS _migrations (
+          nome         TEXT PRIMARY KEY,
+          aplicada_em  TEXT NOT NULL DEFAULT to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')
+        )
+        """
+    )
+    conn.commit()
+
+    if not MIGRATIONS_DIR.exists():
+        return
+
+    ja_aplicadas = {linha["nome"] for linha in conn.execute("SELECT nome FROM _migrations").fetchall()}
+
+    for arquivo in sorted(MIGRATIONS_DIR.glob("*.sql")):
+        if arquivo.name in ja_aplicadas:
+            continue
+        print(f"[burger-tech] Aplicando migração de banco: {arquivo.name}")
+        conn.execute(arquivo.read_text(encoding="utf-8"))
+        conn.execute("INSERT INTO _migrations (nome) VALUES (%s)", (arquivo.name,))
+        conn.commit()
 
 
 def _rotacionar_qr_tokens_do_seed(conn: psycopg.Connection) -> None:

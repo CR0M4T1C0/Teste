@@ -1,11 +1,10 @@
 import { useState } from "react";
-import { CardapioSection } from "@/app/components/sections/CardapioSection";
+import { CardapioSection, type CategoriaOuCombo } from "@/app/components/sections/CardapioSection";
 import { useCartContext } from "@/app/hooks/useCartContext";
-import type { Cat } from "@/app/types";
 
 export function CardapioPage() {
-  const [cat, setCat] = useState<Cat>("hamburguer");
-  const { addCart } = useCartContext();
+  const [cat, setCat] = useState<CategoriaOuCombo>("hamburguer");
+  const { addCart, addComboCart } = useCartContext();
 
-  return <CardapioSection cat={cat} onChangeCat={setCat} onAdd={addCart} />;
+  return <CardapioSection cat={cat} onChangeCat={setCat} onAdd={addCart} onAddCombo={addComboCart} />;
 }

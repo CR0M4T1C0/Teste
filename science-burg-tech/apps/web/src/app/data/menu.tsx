@@ -25,6 +25,10 @@ export const IMG_FALLBACK: Record<string, string> = {
 export const IMG_PLACEHOLDER =
   "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=700&h=560&fit=crop&auto=format";
 
+// As promoções do banner do Cardápio agora vêm da API (GET /api/promocoes,
+// gerenciadas pelo painel admin — veja @/app/hooks/usePromocoes), não são
+// mais um array fixo aqui.
+
 // ─── SLIDES DO HERO (conteúdo de marketing, não vem do banco) ─────────────
 export const HERO_SLIDES = [
   {

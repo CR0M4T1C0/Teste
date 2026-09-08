@@ -6,10 +6,20 @@ import { useCardapio } from "@/app/hooks/useCardapio";
 import type { Item } from "@/app/types";
 
 export function CardapioPreviewSection({ onAdd }: { onAdd: (i: Item) => void }) {
-  const { itensPorCategoria } = useCardapio();
+  const { itensPorCategoria, carregando, erro } = useCardapio();
   const maisPedidos = (itensPorCategoria.hamburguer ?? []).slice(0, 3);
 
-  if (maisPedidos.length === 0) return null;
+  if (erro) {
+    return (
+      <section id="cardapio" className="py-20">
+        <div className="max-w-7xl mx-auto px-6">
+          <p className="text-center text-sm text-muted-foreground">Não foi possível carregar o cardápio agora. Tente novamente em instantes.</p>
+        </div>
+      </section>
+    );
+  }
+
+  if (!carregando && maisPedidos.length === 0) return null;
 
   return (
     <section id="cardapio" className="py-20">
@@ -27,11 +37,26 @@ export function CardapioPreviewSection({ onAdd }: { onAdd: (i: Item) => void }) 
         </FadeUp>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6 mb-10">
-          {maisPedidos.map((item, i) => (
-            <FadeUp key={item.id} delay={i * 0.08}>
-              <CardProduto item={item} onAdd={onAdd} />
-            </FadeUp>
-          ))}
+          {carregando
+            ? Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="bg-card border border-border rounded-2xl overflow-hidden animate-pulse">
+                  <div className="h-52 bg-secondary" />
+                  <div className="flex flex-col gap-3 p-5">
+                    <div className="h-4 w-2/3 rounded bg-secondary" />
+                    <div className="h-3 w-full rounded bg-secondary" />
+                    <div className="h-3 w-4/5 rounded bg-secondary" />
+                    <div className="flex items-center justify-between mt-2 pt-3 border-t border-border/50">
+                      <div className="h-5 w-16 rounded bg-secondary" />
+                      <div className="h-9 w-24 rounded-xl bg-secondary" />
+                    </div>
+                  </div>
+                </div>
+              ))
+            : maisPedidos.map((item, i) => (
+                <FadeUp key={item.id} delay={i * 0.08}>
+                  <CardProduto item={item} onAdd={onAdd} />
+                </FadeUp>
+              ))}
         </div>
 
         <FadeUp className="flex justify-center">

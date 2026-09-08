@@ -1,3 +1,0 @@
-/api/*      https://science-burg-api-2nx9.onrender.com/api/:splat      200
-/uploads/*  https://science-burg-api-2nx9.onrender.com/uploads/:splat  200
-/*          /index.html                                                200

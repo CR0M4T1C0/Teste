@@ -82,10 +82,10 @@ services:
     routes:
       - type: rewrite
         source: /api/*
-        destination: https://science-burg-api.onrender.com/api/*
+        destination: https://science-burg-api-tobe.onrender.com/api/*
       - type: rewrite
         source: /uploads/*
-        destination: https://science-burg-api.onrender.com/uploads/*
+        destination: https://science-burg-api-tobe.onrender.com/uploads/*
 
       # O site usa BrowserRouter (rotas do lado do cliente). Sem esta
       # regra, abrir ou atualizar direto em /cardapio ou /m/{token}

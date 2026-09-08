@@ -1,0 +1,59 @@
+# =============================================================================
+# BURGER TECH — arquivos que NUNCA devem ir para o repositório
+# =============================================================================
+
+# ── Segredos ─────────────────────────────────────────────────────────────────
+# O .env tem as chaves que assinam os tokens de login. Se vazar, qualquer um
+# consegue forjar um token de administrador. Só o .env.example é versionado.
+.env
+.env.*
+!.env.example
+
+# ── Banco de dados ───────────────────────────────────────────────────────────
+# O banco é gerado sozinho a partir do schema.sql na primeira vez que a API
+# sobe. Versionar o .db significa versionar hashes de senha, dados de clientes
+# e os tokens de QR code das mesas.
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+apps/api/database/*.db
+
+# ── Uploads enviados pelo painel admin ───────────────────────────────────────
+# Fotos de produtos são conteúdo de execução, não código-fonte.
+apps/api/uploads/produtos/*
+!apps/api/uploads/produtos/.gitkeep
+
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ── Node / front-end ─────────────────────────────────────────────────────────
+node_modules/
+dist/
+dist-ssr/
+.vite/
+*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ── Editores e sistema operacional ───────────────────────────────────────────
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.log

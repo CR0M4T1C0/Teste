@@ -1,0 +1,103 @@
+# Blueprint do Render — descreve TODO o projeto num arquivo só:
+# a API (Python) e o site (arquivos estáticos).
+#
+# No painel: "New +" > "Blueprint" e aponte para este repositório.
+#
+# O banco NÃO está aqui de propósito: continua no Neon. O Postgres
+# gratuito do Render é apagado depois de 30 dias, enquanto o do Neon
+# não expira. Ver a seção "Banco de dados" no README.
+
+services:
+  # ── API (FastAPI) ─────────────────────────────────────────────────
+  - type: web
+    name: science-burg-api
+    runtime: python
+    plan: free
+    rootDir: apps/api
+
+    buildCommand: pip install -r requirements.txt
+
+    # $PORT é definido pelo Render em tempo de execução. Escutar em
+    # 0.0.0.0 é obrigatório: o processo precisa aceitar conexões
+    # vindas de fora do contêiner.
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+
+    healthCheckPath: /api/saude
+
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+
+      - key: AMBIENTE
+        value: producao
+
+      # sync: false = o valor não fica no repositório; você preenche
+      # no painel do Render. É assim que segredo deve ser tratado.
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET_CLIENTE
+        sync: false
+      - key: JWT_SECRET_ADMIN
+        sync: false
+
+      # Domínio público do site, com https:// e SEM barra no final.
+      # Preenchido no painel depois do primeiro deploy (o Render só
+      # sorteia a URL final quando cria o serviço).
+      # Ex.: https://science-burg-site.onrender.com
+      - key: CORS_ORIGINS
+        sync: false
+
+  # ── Site (React já compilado) ─────────────────────────────────────
+  - type: web
+    name: science-burg-site
+    runtime: static
+    rootDir: apps/web
+
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+
+      # Endereço público da API, com https:// e SEM barra no final.
+      # Preenchido no painel depois do primeiro deploy.
+      # Ex.: https://science-burg-api.onrender.com
+      #
+      # Não dá para usar "fromService: property: host" aqui: o Render
+      # devolve o hostname da rede INTERNA, que o navegador do usuário
+      # não enxerga, e ainda por cima sem o "https://".
+      - key: VITE_API_URL
+        sync: false
+
+    # O front chama a API com caminhos relativos (ex.: fetch("/api/..."),
+    # veja apps/web/src/app/lib/api.ts). Isso só funciona sozinho no "vite
+    # dev" por causa do proxy em vite.config.ts — em produção, sem estas
+    # duas regras, "/api/*" e "/uploads/*" cairiam na regra catch-all lá
+    # embaixo e o front receberia o index.html (HTML) em vez de JSON.
+    #
+    # IMPORTANTE: troque a URL abaixo pelo domínio real do serviço
+    # science-burg-api depois do primeiro deploy (Render só sorteia a URL
+    # final quando cria o serviço).
+    routes:
+      - type: rewrite
+        source: /api/*
+        destination: https://science-burg-api.onrender.com/api/*
+      - type: rewrite
+        source: /uploads/*
+        destination: https://science-burg-api.onrender.com/uploads/*
+
+      # O site usa BrowserRouter (rotas do lado do cliente). Sem esta
+      # regra, abrir ou atualizar direto em /cardapio ou /m/{token}
+      # devolveria 404, porque não existe arquivo com esse nome.
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: SAMEORIGIN
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff

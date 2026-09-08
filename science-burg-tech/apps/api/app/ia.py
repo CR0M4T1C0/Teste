@@ -87,10 +87,7 @@ def _post_json(url: str, corpo: dict, cabecalhos: dict) -> dict:
 
 
 def _gerar_gemini(sistema: str, historico: list[dict]) -> str:
-    url = (
-        f"https://generativelanguage.googleapis.com/v1beta/models/"
-        f"{IA_MODELO}:generateContent?key={IA_CHAVE}"
-    )
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{IA_MODELO}:generateContent"
     corpo = {
         "systemInstruction": {"parts": [{"text": sistema}]},
         "contents": [
@@ -102,7 +99,11 @@ def _gerar_gemini(sistema: str, historico: list[dict]) -> str:
         ],
         "generationConfig": {"temperature": 0.7, "maxOutputTokens": 400},
     }
-    dados = _post_json(url, corpo, {"Content-Type": "application/json"})
+    # As chaves novas do AI Studio vêm no formato "AQ." (auth key) em vez do
+    # antigo "AIzaSy" — o Google descontinuou o parâmetro "?key=" pra elas,
+    # exigindo o header abaixo. Ele também funciona com chaves no formato
+    # antigo, então não precisa distinguir os dois casos aqui.
+    dados = _post_json(url, corpo, {"Content-Type": "application/json", "x-goog-api-key": IA_CHAVE})
     try:
         return dados["candidates"][0]["content"]["parts"][0]["text"].strip()
     except (KeyError, IndexError):

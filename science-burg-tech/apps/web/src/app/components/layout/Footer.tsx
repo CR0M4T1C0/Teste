@@ -19,9 +19,8 @@ export function Footer() {
                 <Cpu size={16} className="text-white" />
               </div>
               <span style={{ fontFamily: "'Bricolage Grotesque',sans-serif" }} className="font-bold text-lg">
-                <span className="text-foreground">Science</span>
-                <span className="text-primary">Burg</span>
-                <span className="text-accent"> Tech</span>
+                <span className="text-primary">burg</span>
+                <span className="text-accent">tech</span>
               </span>
             </Link>
             <p className="text-xs text-muted-foreground leading-relaxed mb-5">
@@ -90,7 +89,7 @@ export function Footer() {
 
         <div className="border-t border-border pt-5 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="text-[11px] text-muted-foreground" style={{ fontFamily: "'JetBrains Mono',monospace" }}>
-            © {new Date().getFullYear()} Science Burg Tech. Todos os direitos reservados.
+            © {new Date().getFullYear()} burgtech. Todos os direitos reservados.
           </p>
           <p className="text-[11px] text-muted-foreground" style={{ fontFamily: "'JetBrains Mono',monospace" }}>
             <span className="text-accent">exit</span>(0); // obrigado pela visita

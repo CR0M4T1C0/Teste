@@ -32,7 +32,7 @@ export function LocalizacaoSection() {
             <div className="relative rounded-3xl overflow-hidden border border-border bg-secondary h-72 lg:h-full min-h-64">
               <iframe
                 src={MAPA_EMBED_URL}
-                title="Mapa de localização — Science Burg Tech"
+                title="Mapa de localização — burgtech"
                 loading="lazy"
                 referrerPolicy="no-referrer-when-downgrade"
                 className="absolute inset-0 w-full h-full grayscale-[15%] contrast-[1.05]"

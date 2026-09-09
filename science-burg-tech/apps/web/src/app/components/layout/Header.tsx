@@ -33,9 +33,8 @@ export function Header({ totalQty, onOpenCart }: { totalQty: number; onOpenCart:
             <Cpu size={18} className="text-white" />
           </div>
           <span style={{ fontFamily: "'Bricolage Grotesque',sans-serif" }} className="font-bold text-lg tracking-tight leading-none">
-            <span className="text-foreground">Science</span>
-            <span className="text-primary">Burg</span>
-            <span className="text-accent"> Tech</span>
+            <span className="text-primary">burg</span>
+            <span className="text-accent">tech</span>
           </span>
         </Link>
 

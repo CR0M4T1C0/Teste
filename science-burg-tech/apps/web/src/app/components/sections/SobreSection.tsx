@@ -17,7 +17,7 @@ export function SobreSection() {
       <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-2 gap-14 items-center">
         <FadeUp>
           <div className="relative rounded-3xl overflow-hidden bg-secondary border border-border shadow-2xl">
-            <ImageWithFallback src={salaoPng} alt="Salão Science Burg Tech com mesas interativas e neons" className="w-full h-[420px] object-cover" />
+            <ImageWithFallback src={salaoPng} alt="Salão burgtech com mesas interativas e neons" className="w-full h-[420px] object-cover" />
             <div className="absolute inset-0 bg-gradient-to-t from-background/60 to-transparent" />
             {/* Badge overlay */}
             <div className="absolute bottom-5 left-5 right-5">
@@ -49,7 +49,7 @@ export function SobreSection() {
             <span className="text-primary">tem sabor.</span>
           </h2>
           <p className="text-muted-foreground text-sm leading-relaxed mb-4">
-            A <strong className="text-foreground">Science Burg Tech</strong> une a paixão por tecnologia e alta gastronomia. Nossa cozinha é
+            A <strong className="text-foreground">burgtech</strong> une a paixão por tecnologia e alta gastronomia. Nossa cozinha é
             otimizada para atender programadores, geeks e entusiastas com a melhor qualidade — porque sabemos que o seu tempo de compilação é
             valioso.
           </p>

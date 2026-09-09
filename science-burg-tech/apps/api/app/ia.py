@@ -1,6 +1,6 @@
 """Integração com o provedor de IA que dá voz ao G.P.T.
 
-G.P.T. = Grill Potato Toast, o atendente virtual da Science Burg Tech.
+G.P.T. = Grill Potato Toast, o atendente virtual da burgtech.
 
 Por que este módulo existe separado do router:
   - a chamada externa fica isolada, então trocar de provedor (Gemini,
@@ -37,7 +37,7 @@ def ia_configurada() -> bool:
 # preço. Por isso o cardápio real é injetado a cada conversa e o modelo é
 # proibido de sair dele.
 INSTRUCOES = """Você é o G.P.T. (Grill Potato Toast), o atendente virtual da \
-hamburgueria Science Burg Tech.
+hamburgueria burgtech.
 
 Personalidade: simpático, direto e com um humor leve de "nerd de tecnologia" \
 — trocadilhos com termos de informática são bem-vindos, mas sem exagero e \

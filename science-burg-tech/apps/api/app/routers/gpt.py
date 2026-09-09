@@ -1,4 +1,4 @@
-"""G.P.T. — Grill Potato Toast, o atendente virtual da Science Burg Tech.
+"""G.P.T. — Grill Potato Toast, o atendente virtual da burgtech.
 
 Fluxo de uma conversa:
   1. o navegador manda o histórico curto da conversa;

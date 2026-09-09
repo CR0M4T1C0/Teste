@@ -13,10 +13,17 @@ Por que este módulo existe separado do router:
 from __future__ import annotations
 
 import json
+import sys
 import urllib.error
 import urllib.request
 
-from app.config import IA_CHAVE, IA_MODELO, IA_PROVEDOR, IA_TIMEOUT_SEGUNDOS
+from app.config import (
+    IA_CHAVE,
+    IA_MODELO,
+    IA_MODELO_ALTERNATIVO,
+    IA_PROVEDOR,
+    IA_TIMEOUT_SEGUNDOS,
+)
 
 
 class IAIndisponivel(Exception):
@@ -24,7 +31,15 @@ class IAIndisponivel(Exception):
 
     O router trata isso devolvendo uma mensagem amigável em vez de um erro
     500: um atendente fora do ar não pode derrubar o site inteiro.
+
+    `temporaria` separa "o provedor está sobrecarregado agora" de "esta
+    requisição está errada". Só a primeira vale uma segunda tentativa — e só
+    ela merece dizer ao cliente que é para tentar de novo daqui a pouco.
     """
+
+    def __init__(self, mensagem: str, temporaria: bool = False) -> None:
+        super().__init__(mensagem)
+        self.temporaria = temporaria
 
 
 def ia_configurada() -> bool:
@@ -73,7 +88,7 @@ def montar_prompt_do_sistema(cardapio: str, promocoes: str) -> str:
 # ── Chamada ao provedor ──────────────────────────────────────────────────────
 
 
-def _post_json(url: str, corpo: dict, cabecalhos: dict) -> dict:
+def _post_json(url: str, corpo: dict, cabecalhos: dict, modelo: str) -> dict:
     dados = json.dumps(corpo).encode("utf-8")
     req = urllib.request.Request(url, data=dados, headers=cabecalhos, method="POST")
     try:
@@ -86,15 +101,26 @@ def _post_json(url: str, corpo: dict, cabecalhos: dict) -> dict:
         # linha — um "{" solitário — sobreviveria ao filtro de busca.
         bruto = e.read().decode("utf-8", errors="replace")
         detalhe = " ".join(bruto.split())[:400]
+        # 429/500/502/503 dizem "estou sobrecarregado", não "seu pedido está
+        # errado": a mesma chamada tende a funcionar daqui a pouco. Chave
+        # recusada (401/403) ou modelo inexistente (404) falhariam igual numa
+        # segunda tentativa, então não vale fazer o cliente esperar o dobro.
         raise IAIndisponivel(
-            f"provedor={IA_PROVEDOR} modelo={IA_MODELO} respondeu {e.code}: {detalhe}"
+            f"provedor={IA_PROVEDOR} modelo={modelo} respondeu {e.code}: {detalhe}",
+            temporaria=e.code in (429, 500, 502, 503),
         ) from e
-    except Exception as e:  # timeout, DNS, conexão recusada
-        raise IAIndisponivel(str(e)) from e
+    except TimeoutError as e:
+        raise IAIndisponivel(f"modelo={modelo}: tempo esgotado ({e})", temporaria=True) from e
+    except urllib.error.URLError as e:
+        raise IAIndisponivel(
+            f"modelo={modelo}: {e}", temporaria=isinstance(e.reason, TimeoutError)
+        ) from e
+    except Exception as e:  # DNS, conexão recusada, JSON inválido
+        raise IAIndisponivel(f"modelo={modelo}: {e}") from e
 
 
-def _gerar_gemini(sistema: str, historico: list[dict]) -> str:
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{IA_MODELO}:generateContent"
+def _gerar_gemini(sistema: str, historico: list[dict], modelo: str) -> str:
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent"
     corpo = {
         "systemInstruction": {"parts": [{"text": sistema}]},
         "contents": [
@@ -120,24 +146,27 @@ def _gerar_gemini(sistema: str, historico: list[dict]) -> str:
     # antigo "AIzaSy" — o Google descontinuou o parâmetro "?key=" pra elas,
     # exigindo o header abaixo. Ele também funciona com chaves no formato
     # antigo, então não precisa distinguir os dois casos aqui.
-    dados = _post_json(url, corpo, {"Content-Type": "application/json", "x-goog-api-key": IA_CHAVE})
+    dados = _post_json(
+        url, corpo, {"Content-Type": "application/json", "x-goog-api-key": IA_CHAVE}, modelo
+    )
     try:
         return dados["candidates"][0]["content"]["parts"][0]["text"].strip()
     except (KeyError, IndexError):
         raise IAIndisponivel("resposta do provedor veio em formato inesperado")
 
 
-def _gerar_openai(sistema: str, historico: list[dict]) -> str:
+def _gerar_openai(sistema: str, historico: list[dict], modelo: str) -> str:
     mensagens = [{"role": "system", "content": sistema}]
     mensagens += [
         {"role": "assistant" if m["autor"] == "gpt" else "user", "content": m["texto"]}
         for m in historico
     ]
-    corpo = {"model": IA_MODELO, "messages": mensagens, "temperature": 0.3, "max_tokens": 600}
+    corpo = {"model": modelo, "messages": mensagens, "temperature": 0.3, "max_tokens": 600}
     dados = _post_json(
         "https://api.openai.com/v1/chat/completions",
         corpo,
         {"Content-Type": "application/json", "Authorization": f"Bearer {IA_CHAVE}"},
+        modelo,
     )
     try:
         return dados["choices"][0]["message"]["content"].strip()
@@ -145,9 +174,9 @@ def _gerar_openai(sistema: str, historico: list[dict]) -> str:
         raise IAIndisponivel("resposta do provedor veio em formato inesperado")
 
 
-def _gerar_anthropic(sistema: str, historico: list[dict]) -> str:
+def _gerar_anthropic(sistema: str, historico: list[dict], modelo: str) -> str:
     corpo = {
-        "model": IA_MODELO,
+        "model": modelo,
         "max_tokens": 600,
         "temperature": 0.3,
         "system": sistema,
@@ -164,6 +193,7 @@ def _gerar_anthropic(sistema: str, historico: list[dict]) -> str:
             "x-api-key": IA_CHAVE,
             "anthropic-version": "2023-06-01",
         },
+        modelo,
     )
     try:
         return dados["content"][0]["text"].strip()
@@ -179,6 +209,12 @@ def gerar_resposta(sistema: str, historico: list[dict]) -> str:
 
     `historico` é uma lista de {"autor": "cliente"|"gpt", "texto": str},
     do mais antigo para o mais recente, terminando na fala do cliente.
+
+    Falha temporária no modelo principal cai para o alternativo. O modelo mais
+    recente é também o mais disputado: o principal vinha respondendo 503
+    ("high demand") e estourando o tempo, e uma geração anterior costuma estar
+    menos congestionada. Sem isso, um único 503 já virava "estou fora do ar"
+    para o cliente.
     """
     if not ia_configurada():
         raise IAIndisponivel("IA_CHAVE não configurada no .env")
@@ -188,4 +224,23 @@ def gerar_resposta(sistema: str, historico: list[dict]) -> str:
         raise IAIndisponivel(
             f"provedor '{IA_PROVEDOR}' desconhecido — use gemini, openai ou anthropic"
         )
-    return gerar(sistema, historico)
+
+    modelos = [IA_MODELO]
+    if IA_MODELO_ALTERNATIVO and IA_MODELO_ALTERNATIVO != IA_MODELO:
+        modelos.append(IA_MODELO_ALTERNATIVO)
+
+    ultima_falha: IAIndisponivel | None = None
+    for modelo in modelos:
+        try:
+            return gerar(sistema, historico, modelo)
+        except IAIndisponivel as e:
+            # Chave recusada ou modelo inexistente falhariam igual na segunda
+            # tentativa: só fariam o cliente esperar o dobro para ver o mesmo
+            # erro. Só sobrecarga e lentidão valem tentar o outro modelo.
+            if not e.temporaria:
+                raise
+            ultima_falha = e
+            print(f"[burger-tech] {e} — tentando o próximo modelo", file=sys.stderr)
+
+    assert ultima_falha is not None
+    raise ultima_falha

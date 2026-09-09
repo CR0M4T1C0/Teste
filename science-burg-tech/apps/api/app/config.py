@@ -140,4 +140,13 @@ if EH_PRODUCAO and "*" in CORS_ORIGINS:
 IA_PROVEDOR = _env("IA_PROVEDOR", "gemini").strip().lower()
 IA_CHAVE = os.getenv("IA_CHAVE", "").strip()
 IA_MODELO = _env("IA_MODELO", "gemini-3.6-flash")
-IA_TIMEOUT_SEGUNDOS = int(_env("IA_TIMEOUT_SEGUNDOS", "30"))
+
+# Para onde o G.P.T. cai quando o modelo principal responde 503 ("high
+# demand") ou demora demais. O modelo mais recente é o mais disputado; uma
+# geração anterior, ainda suportada, costuma estar menos congestionada.
+# Deixe vazio para desligar a segunda tentativa.
+IA_MODELO_ALTERNATIVO = _env("IA_MODELO_ALTERNATIVO", "gemini-3.5-flash")
+
+# Vale por tentativa, e agora são até duas — por isso o valor caiu de 30s:
+# 20 + 20 já é bastante tempo para alguém esperando uma sugestão de lanche.
+IA_TIMEOUT_SEGUNDOS = int(_env("IA_TIMEOUT_SEGUNDOS", "20"))

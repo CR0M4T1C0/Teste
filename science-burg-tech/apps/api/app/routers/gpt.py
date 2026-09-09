@@ -30,6 +30,14 @@ FORA_DO_AR = (
     "Dá uma olhada no cardápio que tem coisa boa lá."
 )
 
+# Sobrecarga do provedor não é a mesma coisa que estar quebrado, e a diferença
+# importa para quem está do outro lado: aqui vale a pena insistir daqui a
+# pouco, então a mensagem pede isso em vez de sugerir que desista.
+SOBRECARREGADO = (
+    "Opa! Tem fila no meu processador agora e não consegui pensar a tempo. "
+    "Manda de novo daqui a pouquinho que eu te respondo."
+)
+
 
 def _montar_cardapio(db: psycopg.Connection) -> str:
     """Descreve o cardápio em texto, para virar contexto do modelo.
@@ -129,6 +137,7 @@ def conversar(
         # log, uma chave recusada é indistinguível de um provedor fora do ar:
         # o site mostra a mesma frase amigável nos dois casos.
         print(f"[burger-tech] G.P.T. indisponível: {e}", file=sys.stderr)
-        return GptRespostaOut(resposta=FORA_DO_AR, disponivel=False)
+        resposta_de_erro = SOBRECARREGADO if e.temporaria else FORA_DO_AR
+        return GptRespostaOut(resposta=resposta_de_erro, disponivel=False)
 
     return GptRespostaOut(resposta=resposta, disponivel=True)

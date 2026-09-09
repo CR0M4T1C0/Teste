@@ -104,7 +104,17 @@ def _gerar_gemini(sistema: str, historico: list[dict]) -> str:
             }
             for m in historico
         ],
-        "generationConfig": {"temperature": 0.3, "maxOutputTokens": 600},
+        "generationConfig": {
+            "temperature": 0.3,
+            "maxOutputTokens": 600,
+            # O gemini-3.6-flash raciocina em nível "medium" por padrão, e
+            # isso estourava o timeout: toda conversa caía no texto de fallback.
+            # Recomendar item de cardápio não exige raciocínio longo, então o
+            # nível baixo troca um ganho que não usaríamos por uma resposta que
+            # chega a tempo. Não combinar com thinkingBudget: os dois juntos são
+            # recusados com 400.
+            "thinkingConfig": {"thinkingLevel": "low"},
+        },
     }
     # As chaves novas do AI Studio vêm no formato "AQ." (auth key) em vez do
     # antigo "AIzaSy" — o Google descontinuou o parâmetro "?key=" pra elas,

@@ -140,4 +140,4 @@ if EH_PRODUCAO and "*" in CORS_ORIGINS:
 IA_PROVEDOR = _env("IA_PROVEDOR", "gemini").strip().lower()
 IA_CHAVE = os.getenv("IA_CHAVE", "").strip()
 IA_MODELO = _env("IA_MODELO", "gemini-3.6-flash")
-IA_TIMEOUT_SEGUNDOS = int(_env("IA_TIMEOUT_SEGUNDOS", "20"))
+IA_TIMEOUT_SEGUNDOS = int(_env("IA_TIMEOUT_SEGUNDOS", "30"))

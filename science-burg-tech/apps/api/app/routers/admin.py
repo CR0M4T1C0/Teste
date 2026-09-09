@@ -7,7 +7,6 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 
 from app.auth_admin import criar_token_admin, exigir_papel_admin, get_admin_atual
 from app.auth_cliente import gastar_tempo_de_verificacao, verificar_senha
-from app.config import UPLOADS_PRODUTOS_DIR
 from app.db import get_db
 from app.limite_tentativas import registrar_falha, registrar_sucesso, segundos_de_bloqueio
 from app.routers.mesas import _montar_comanda_out
@@ -44,7 +43,7 @@ from app.routers.cupons import _linha_para_cupom
 from app.routers.promocoes import _linha_para_promocao_admin
 from app.websocket import gerenciador_admin
 
-EXTENSOES_IMAGEM_PERMITIDAS = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}
+TIPOS_IMAGEM_PERMITIDOS = frozenset({"image/jpeg", "image/png", "image/webp", "image/gif"})
 TAMANHO_MAXIMO_IMAGEM = 5 * 1024 * 1024  # 5 MB
 
 # "Assinaturas" (magic bytes) que todo arquivo do formato tem no começo. O
@@ -319,9 +318,9 @@ async def fechar_comanda(
 async def upload_imagem(
     file: UploadFile = File(...),
     _admin: dict = Depends(exigir_papel_admin),
+    db: psycopg.Connection = Depends(get_db),
 ) -> ImagemUploadOut:
-    extensao = EXTENSOES_IMAGEM_PERMITIDAS.get(file.content_type or "")
-    if extensao is None:
+    if (file.content_type or "") not in TIPOS_IMAGEM_PERMITIDOS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Envie uma imagem JPEG, PNG, WEBP ou GIF",
@@ -342,11 +341,18 @@ async def upload_imagem(
             detail="O arquivo enviado não é uma imagem válida do tipo informado",
         )
 
-    UPLOADS_PRODUTOS_DIR.mkdir(parents=True, exist_ok=True)
-    nome_arquivo = f"{secrets.token_urlsafe(12)}{extensao}"
-    (UPLOADS_PRODUTOS_DIR / nome_arquivo).write_bytes(conteudo)
+    # Os bytes vão para o banco, não para o disco: no Render o sistema de
+    # arquivos da instância é efêmero, então a cada deploy ou hibernação as
+    # fotos gravadas em disco sumiam e o cardápio ficava com imagem quebrada,
+    # porque o banco guardava só o caminho do arquivo.
+    imagem_id = secrets.token_urlsafe(12)
+    db.execute(
+        "INSERT INTO imagens (id, mime, conteudo) VALUES (%s, %s, %s)",
+        (imagem_id, file.content_type, conteudo),
+    )
+    db.commit()
 
-    return ImagemUploadOut(url=f"/uploads/produtos/{nome_arquivo}")
+    return ImagemUploadOut(url=f"/api/imagens/{imagem_id}")
 
 
 @router.get("/produtos", response_model=list[ProdutoOut])

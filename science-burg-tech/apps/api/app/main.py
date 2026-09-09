@@ -17,6 +17,7 @@ from app.routers import (
     cupons,
     enderecos,
     gpt,
+    imagens,
     mesas,
     mesas_virtuais,
     pedidos,
@@ -63,6 +64,7 @@ app.include_router(avaliacoes.router, prefix="/api")
 app.include_router(mesas_virtuais.router, prefix="/api")
 app.include_router(mesas_virtuais.admin_router, prefix="/api")
 app.include_router(gpt.router, prefix="/api")
+app.include_router(imagens.router, prefix="/api")
 
 
 @app.get("/api/saude")

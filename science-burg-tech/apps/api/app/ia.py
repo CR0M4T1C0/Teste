@@ -80,8 +80,15 @@ def _post_json(url: str, corpo: dict, cabecalhos: dict) -> dict:
         with urllib.request.urlopen(req, timeout=IA_TIMEOUT_SEGUNDOS) as r:
             return json.loads(r.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
-        detalhe = e.read().decode("utf-8", errors="replace")[:300]
-        raise IAIndisponivel(f"provedor respondeu {e.code}: {detalhe}") from e
+        # O corpo do erro vem como JSON indentado. Colapsar os espaços em
+        # branco mantém a mensagem inteira numa única linha: agregadores de
+        # log (o do Render, por exemplo) quebram por "\n" e só a primeira
+        # linha — um "{" solitário — sobreviveria ao filtro de busca.
+        bruto = e.read().decode("utf-8", errors="replace")
+        detalhe = " ".join(bruto.split())[:400]
+        raise IAIndisponivel(
+            f"provedor={IA_PROVEDOR} modelo={IA_MODELO} respondeu {e.code}: {detalhe}"
+        ) from e
     except Exception as e:  # timeout, DNS, conexão recusada
         raise IAIndisponivel(str(e)) from e
 

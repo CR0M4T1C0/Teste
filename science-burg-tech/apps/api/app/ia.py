@@ -97,7 +97,7 @@ def _gerar_gemini(sistema: str, historico: list[dict]) -> str:
             }
             for m in historico
         ],
-        "generationConfig": {"temperature": 0.7, "maxOutputTokens": 400},
+        "generationConfig": {"temperature": 0.3, "maxOutputTokens": 600},
     }
     # As chaves novas do AI Studio vêm no formato "AQ." (auth key) em vez do
     # antigo "AIzaSy" — o Google descontinuou o parâmetro "?key=" pra elas,
@@ -116,7 +116,7 @@ def _gerar_openai(sistema: str, historico: list[dict]) -> str:
         {"role": "assistant" if m["autor"] == "gpt" else "user", "content": m["texto"]}
         for m in historico
     ]
-    corpo = {"model": IA_MODELO, "messages": mensagens, "temperature": 0.7, "max_tokens": 400}
+    corpo = {"model": IA_MODELO, "messages": mensagens, "temperature": 0.3, "max_tokens": 600}
     dados = _post_json(
         "https://api.openai.com/v1/chat/completions",
         corpo,
@@ -131,7 +131,8 @@ def _gerar_openai(sistema: str, historico: list[dict]) -> str:
 def _gerar_anthropic(sistema: str, historico: list[dict]) -> str:
     corpo = {
         "model": IA_MODELO,
-        "max_tokens": 400,
+        "max_tokens": 600,
+        "temperature": 0.3,
         "system": sistema,
         "messages": [
             {"role": "assistant" if m["autor"] == "gpt" else "user", "content": m["texto"]}

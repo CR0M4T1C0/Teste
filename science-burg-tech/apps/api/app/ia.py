@@ -100,7 +100,7 @@ def _gerar_gemini(sistema: str, historico: list[dict]) -> str:
             }
             for m in historico
         ],
-        "generationConfig": {"temperature": 0.7, "maxOutputTokens": 400},
+        "generationConfig": {"temperature": 0.3, "maxOutputTokens": 600},
     }
     dados = _post_json(url, corpo, {"Content-Type": "application/json"})
     try:

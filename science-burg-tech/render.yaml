@@ -13,7 +13,7 @@ services:
     name: science-burg-api
     runtime: python
     plan: free
-    rootDir: apps/api
+    rootDir: science-burg-tech/apps/api
 
     buildCommand: pip install -r requirements.txt
 
@@ -51,7 +51,7 @@ services:
   - type: web
     name: science-burg-site
     runtime: static
-    rootDir: apps/web
+    rootDir: science-burg-tech/apps/web
 
     buildCommand: npm install && npm run build
     staticPublishPath: dist

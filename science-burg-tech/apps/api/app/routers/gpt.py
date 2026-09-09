@@ -11,6 +11,8 @@ decisão consciente — guardar conversa de cliente traria responsabilidade de
 privacidade (LGPD) sem benefício para o objetivo do projeto.
 """
 
+import sys
+
 import psycopg
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
@@ -121,9 +123,12 @@ def conversar(
 
     try:
         resposta = gerar_resposta(sistema, historico)
-    except IAIndisponivel:
+    except IAIndisponivel as e:
         # O erro real fica no log do servidor; o cliente vê algo amigável.
-        # Detalhe de provedor ou chave nunca vaza para o navegador.
+        # Detalhe de provedor ou chave nunca vaza para o navegador. Sem este
+        # log, uma chave recusada é indistinguível de um provedor fora do ar:
+        # o site mostra a mesma frase amigável nos dois casos.
+        print(f"[burger-tech] G.P.T. indisponível: {e}", file=sys.stderr)
         return GptRespostaOut(resposta=FORA_DO_AR, disponivel=False)
 
     return GptRespostaOut(resposta=resposta, disponivel=True)

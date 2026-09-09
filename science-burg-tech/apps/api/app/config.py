@@ -139,5 +139,5 @@ if EH_PRODUCAO and "*" in CORS_ORIGINS:
 # resto do sistema funciona igual: ele é um extra, não um pilar.
 IA_PROVEDOR = _env("IA_PROVEDOR", "gemini").strip().lower()
 IA_CHAVE = os.getenv("IA_CHAVE", "").strip()
-IA_MODELO = _env("IA_MODELO", "gemini-1.5-flash-latest")
+IA_MODELO = _env("IA_MODELO", "gemini-2.0-flash")
 IA_TIMEOUT_SEGUNDOS = int(_env("IA_TIMEOUT_SEGUNDOS", "20"))

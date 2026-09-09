@@ -202,9 +202,27 @@ export type RelatorioApi = {
 export const adminRelatorios = (token: string, dias: number) =>
   apiFetch<RelatorioApi>(`/admin/relatorios?dias=${dias}`, { headers: authHeader(token) });
 
-export function wsAdminUrl(token: string): string {
+/** Origem do WebSocket, sem barra no final (ex.: "wss://api.exemplo.com").
+ *
+ * As chamadas HTTP usam caminho relativo porque o Render reescreve "/api/*"
+ * para a API. Com WebSocket isso não funciona: as regras de rewrite do site
+ * estático valem só para HTTP, então "/ws/*" caía na regra catch-all e o
+ * navegador recebia o index.html em vez de abrir a conexão. Por isso o socket
+ * vai direto ao domínio da API, informado por VITE_API_URL.
+ *
+ * Sem essa variável — no "vite dev" — vale a origem atual, que o proxy do
+ * vite.config.ts encaminha para a API local com ws: true.
+ */
+function wsBase(): string {
+  const api: string = (import.meta.env.VITE_API_URL ?? "").trim();
+  if (api) return api.replace(/\/+$/, "").replace(/^http/, "ws");
+
   const protocolo = window.location.protocol === "https:" ? "wss" : "ws";
-  return `${protocolo}://${window.location.host}/ws/admin?token=${encodeURIComponent(token)}`;
+  return `${protocolo}://${window.location.host}`;
+}
+
+export function wsAdminUrl(token: string): string {
+  return `${wsBase()}/ws/admin?token=${encodeURIComponent(token)}`;
 }
 
 // ── Cupons ───────────────────────────────────────────────────────────────────
@@ -376,13 +394,11 @@ export const desbloquearUsuario = (token: string, bloqueadoUsuarioId: number) =>
   apiFetch<void>(`/mesas-virtuais/bloqueios/${bloqueadoUsuarioId}`, { method: "DELETE", headers: authHeader(token) });
 
 export function wsMesaVirtualUrl(mesaVirtualId: number, token: string): string {
-  const protocolo = window.location.protocol === "https:" ? "wss" : "ws";
-  return `${protocolo}://${window.location.host}/ws/mesas-virtuais/${mesaVirtualId}?token=${encodeURIComponent(token)}`;
+  return `${wsBase()}/ws/mesas-virtuais/${mesaVirtualId}?token=${encodeURIComponent(token)}`;
 }
 
 export function wsSalaoUrl(): string {
-  const protocolo = window.location.protocol === "https:" ? "wss" : "ws";
-  return `${protocolo}://${window.location.host}/ws/mesas-virtuais/salao`;
+  return `${wsBase()}/ws/mesas-virtuais/salao`;
 }
 
 // ── Moderação de Mesas Virtuais (painel do dono) ────────────────────────────

@@ -9,10 +9,60 @@ segurança real (ver database/README.md).
 """
 
 import getpass
+import os
 import sys
 
 from app.auth_cliente import hash_senha
 from app.db import _conectar, inicializar_banco
+
+
+def criar_admin_do_ambiente() -> None:
+    """Cria o primeiro administrador a partir de ADMIN_EMAIL/ADMIN_SENHA.
+
+    Existe porque o plano gratuito do Render não dá acesso a shell: sem isto
+    não haveria como rodar o main() interativo contra o banco de produção, e
+    o painel administrativo ficaria inalcançável para sempre.
+
+    Só age com a tabela vazia. Essa condição é o que impede a variável de
+    ambiente de virar uma porta dos fundos: depois que existe um admin, nada
+    aqui cria um segundo nem troca a senha de quem já está lá.
+    """
+    email = os.getenv("ADMIN_EMAIL", "").strip()
+    senha = os.getenv("ADMIN_SENHA", "")
+    if not email or not senha:
+        return
+
+    db = _conectar()
+    try:
+        if db.execute("SELECT id FROM administradores LIMIT 1").fetchone() is not None:
+            print(
+                "[burger-tech] ADMIN_EMAIL/ADMIN_SENHA ignorados: já existe "
+                "administrador. Remova as duas variáveis do ambiente.",
+                file=sys.stderr,
+            )
+            return
+
+        if len(senha) < 6:
+            print(
+                "[burger-tech] ADMIN_SENHA tem menos de 6 caracteres — "
+                "administrador inicial não foi criado.",
+                file=sys.stderr,
+            )
+            return
+
+        nome = os.getenv("ADMIN_NOME", "").strip() or email.split("@")[0]
+        db.execute(
+            "INSERT INTO administradores (nome, email, senha_hash, papel) VALUES (%s, %s, %s, %s)",
+            (nome, email, hash_senha(senha), "admin"),
+        )
+        db.commit()
+        print(
+            f"[burger-tech] Administrador inicial criado: {email}. "
+            "Remova ADMIN_EMAIL e ADMIN_SENHA do painel agora.",
+            file=sys.stderr,
+        )
+    finally:
+        db.close()
 
 
 def main() -> None:

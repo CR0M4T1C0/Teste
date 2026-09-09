@@ -6,6 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.auth_admin import autenticar_admin_websocket
 from app.config import CORS_ORIGINS, UPLOADS_DIR
+from app.criar_admin import criar_admin_do_ambiente
 from app.db import _conectar, abrir_pool, fechar_pool, inicializar_banco
 from app.routers import (
     admin,
@@ -28,6 +29,7 @@ from app.websocket import gerenciador_admin
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     inicializar_banco()
+    criar_admin_do_ambiente()
     abrir_pool()
     yield
     fechar_pool()
